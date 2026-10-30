@@ -1,0 +1,63 @@
+# Party Harbor
+
+Every gathering has a home. A self-hostable, mobile-first app for coordinating private household gatherings: contacts, invitations, household RSVPs, contributions, tasks and countdowns. Guests get a private link and never need an account.
+
+This is the local-first MVP built from the Party Harbor PRD v1.0.
+
+## Run it locally
+
+Requirements: Node 20 or newer. No database install needed: the app runs an embedded Postgres (PGlite) that stores its files under `data/pgdata`.
+
+```bash
+npm install
+npm run dev
+```
+
+Open http://localhost:3000 and sign in with one of the seeded host accounts:
+
+| Host  | Email                     | Password     |
+| ----- | ------------------------- | ------------ |
+| Rita  | rita@partyharbor.local    | `harbor-dev` |
+| Randy | randy@partyharbor.local   | `harbor-dev` |
+
+Set `SEED_HOST_PASSWORD` in `.env.local` before the first start to pick a different password. The first start also seeds three sample events and four synthetic households so there is something to click on.
+
+To start over with an empty database, stop the dev server and delete the data folder.
+
+If the project folder is inside OneDrive (or Dropbox, iCloud…), set `PGLITE_DATA_DIR` in `.env.local` to a folder outside the synced tree, such as `C:\Users\you\AppData\Local\PartyHarbor\pgdata`. Sync clients lock files and Postgres then fails to start with "could not create lock file".
+
+## What works today
+
+- Host sign-in with sessions (two owner accounts)
+- Dashboard: upcoming events with countdowns, RSVP counts, open and overdue tasks
+- Events: create, edit, lifecycle status (draft → invitations open → RSVP closed → underway → memories → archived)
+- Contacts: households and people, child flag, messaging-consent record
+- Guest invitation links: one per household, unguessable, stored hashed, revocable and regenerable
+- Guest page: event details, household RSVP (adults/children/note), sign-up slots with capacity, free-form "I'll bring…"
+- Hosts can record replies received by phone, manage tasks per event, and manage contribution slots
+- Contest voting (one contest per event): guests enter their bakes from their link, hosts approve entries and freeze the ballot, open voting, see a live tally, close and reveal. One vote per household per category (database-enforced), self-vote policy, eligibility by RSVP, ties shared, every status change audited.
+
+## Not built yet (per the PRD phases)
+
+Messaging (SMS/WhatsApp) and automation jobs, photo gallery (including entry photos), event templates/cloning, host digests, the external agent API, SMS reply voting, and multi-host co-host permissions. Hosting on Vercel/Supabase is a later step; the schema is plain Postgres so the move is a driver swap.
+
+## Project layout
+
+```
+src/app/(host)/      host portal pages (require a session)
+src/app/e/[token]/   guest microsite
+src/app/login/       host sign-in
+src/actions/         server actions (all host actions call requireHost)
+src/db/schema.ts     Drizzle schema (Postgres)
+src/db/seed.ts       first-run synthetic data
+src/lib/             auth, tokens, dates, queries
+drizzle/             generated SQL migrations (run automatically at startup)
+```
+
+After changing `src/db/schema.ts`, run `npx drizzle-kit generate` to produce a new migration.
+
+## Design
+
+Coastal Sunset tokens from the PRD live in `src/app/globals.css`. Navy carries primary text and controls; coral is reserved for highlights and date badges. Headings use Fraunces, the "You're invited!" line uses Caveat, body text is Geist (all open-licensed Google Fonts).
+
+Each event picks one of the four PRD themes (Coastal Classic, Sunset Warmth, Celebration Bright, Modern Earth), defined in `src/lib/themes.ts`. The theme drives the guest page's colours and the cover art fallback; hosts can also paste a cover photo link. The original PRD mock-ups are in `docs/mockups/` for reference.

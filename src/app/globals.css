@@ -1,0 +1,68 @@
+@import "tailwindcss";
+
+/* Coastal Sunset design tokens (PRD section 6). */
+@theme {
+  --color-navy: #244d70;
+  --color-navy-deep: #1a3a56;
+  --color-sky: #a9d6e5;
+  --color-sky-soft: #e3f2f8;
+  --color-coral: #fa8b80;
+  --color-coral-deep: #c9463b;
+  --color-peach: #f6bba7;
+  --color-cream: #fff3e8;
+  --color-sage: #b7d4c0;
+  --color-sage-deep: #3f6d4e;
+  --color-sun: #f9b84a;
+  --color-white: #ffffff;
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --font-display: var(--font-fraunces), Georgia, serif;
+  --font-script: var(--font-caveat), cursive;
+  --shadow-card: 0 1px 2px rgb(36 77 112 / 0.06), 0 8px 24px -12px rgb(36 77 112 / 0.18);
+}
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  background: var(--color-cream);
+  color: var(--color-navy);
+  font-family: var(--font-sans);
+}
+
+/* Per-event theme hooks: a subtree sets --t-* via inline style (see lib/themes.ts). */
+.t-bg {
+  background: var(--t-bg, var(--color-cream));
+}
+.t-soft {
+  background: var(--t-soft, var(--color-sky-soft));
+}
+.t-accent {
+  color: var(--t-accent, var(--color-navy));
+}
+.t-highlight {
+  color: var(--t-highlight, var(--color-coral-deep));
+}
+.t-chip {
+  background: var(--t-chip, var(--color-sky));
+}
+.t-btn {
+  background: var(--t-accent, var(--color-navy));
+  color: #fff;
+}
+.t-btn:hover {
+  background: var(--t-accent-deep, var(--color-navy-deep));
+}
+.t-ring {
+  border-color: color-mix(in srgb, var(--t-accent, var(--color-navy)) 25%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

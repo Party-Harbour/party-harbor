@@ -1,15 +1,17 @@
 import { notFound } from "next/navigation";
 import { generateInvites, hostSetRsvp, regenerateInvite, revokeInvite } from "@/actions/invites";
-import { InviteGenerator, RegenerateLink } from "@/components/invite-links";
+import { CopyButton, InviteGenerator, RegenerateLink } from "@/components/invite-links";
 import { Card, EmptyState, Pill, RSVP_LABEL, RSVP_TONE, SectionTitle } from "@/components/ui";
 import { RSVP_STATUSES } from "@/db/schema";
+import { getBaseUrl } from "@/lib/base-url";
+import { inviteUrl, storedInviteToken } from "@/lib/invite-links";
 import { getEvent, getEventGuests, listHouseholds } from "@/lib/queries";
 
 export default async function GuestsPage({ params }: PageProps<"/events/[id]/guests">) {
   const { id } = await params;
   const event = await getEvent(id);
   if (!event) notFound();
-  const [guests, households] = await Promise.all([getEventGuests(id), listHouseholds()]);
+  const [guests, households, baseUrl] = await Promise.all([getEventGuests(id), listHouseholds(), getBaseUrl()]);
   const activeGuests = guests.filter((g) => !g.invite.revokedAt);
   const revokedGuests = guests.filter((g) => g.invite.revokedAt);
   const invitedIds = new Set(activeGuests.map((g) => g.household.id));
@@ -32,6 +34,8 @@ export default async function GuestsPage({ params }: PageProps<"/events/[id]/gue
           <ul className="space-y-3">
             {activeGuests.map((g) => {
               const status = g.rsvp?.status ?? "pending";
+              const token = storedInviteToken(g.invite);
+              const link = token ? inviteUrl(baseUrl, token) : null;
               return (
                 <Card key={g.invite.id} as="li">
                   <div className="flex flex-wrap items-start justify-between gap-2">
@@ -103,6 +107,12 @@ export default async function GuestsPage({ params }: PageProps<"/events/[id]/gue
                       </button>
                     </form>
                     <span className="mx-1 hidden text-navy/30 sm:inline">|</span>
+                    {link ? (
+                      <span className="inline-flex items-center gap-1">
+                        <code className="max-w-48 truncate rounded bg-cream px-1.5 py-0.5">{link}</code>
+                        <CopyButton text={link} />
+                      </span>
+                    ) : null}
                     <RegenerateLink action={regenerateInvite.bind(null, g.invite.id)} />
                     <form action={revokeInvite}>
                       <input type="hidden" name="inviteId" value={g.invite.id} />

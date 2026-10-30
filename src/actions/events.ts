@@ -7,6 +7,7 @@ import { getDb, schema } from "@/db";
 import { EVENT_STATUSES, EVENT_THEMES, type Event } from "@/db/schema";
 import { requireHost } from "@/lib/auth";
 import { isValidTimeZone, wallToUtc } from "@/lib/dates";
+import { rescheduleRelativeMessages } from "@/lib/messaging/queue";
 import { optional, str, type ActionState } from "@/lib/action-state";
 
 type EventValues = Pick<
@@ -99,18 +100,20 @@ export async function updateEvent(
   if (!EVENT_STATUSES.includes(status)) return { error: "Unknown event status." };
 
   const db = await getDb();
-  const updated = await db
+  const [updated] = await db
     .update(schema.events)
     .set({ ...parsed.values, status, updatedAt: new Date() })
     .where(eq(schema.events.id, eventId))
-    .returning({ id: schema.events.id });
-  if (updated.length === 0) return { error: "That event no longer exists." };
+    .returning();
+  if (!updated) return { error: "That event no longer exists." };
   await db.insert(schema.auditLog).values({
     actor: host.email,
     eventId,
     action: "event.updated",
     metadata: { status },
   });
+  // Reminders scheduled "2 days before" etc. follow the new date.
+  await rescheduleRelativeMessages(updated, host.email);
   revalidateEvent(eventId);
   redirect(`/events/${eventId}`);
 }

@@ -6,6 +6,8 @@ import { getDb, schema } from "@/db";
 import { RSVP_STATUSES, type Rsvp } from "@/db/schema";
 import { requireHost } from "@/lib/auth";
 import { getBaseUrl } from "@/lib/base-url";
+import { inviteUrl, rotateInviteToken } from "@/lib/invite-links";
+import { encryptToken } from "@/lib/messaging/crypto";
 import { generateInviteToken, hashInviteToken } from "@/lib/tokens";
 import { int, str } from "@/lib/action-state";
 
@@ -19,9 +21,9 @@ function revalidateGuests(eventId: string) {
 }
 
 /**
- * Creates (or re-issues, for a revoked row) one invite per selected household
- * and returns the raw links. Only the hash is stored, so this is the one
- * moment the links are visible; hosts can regenerate later.
+ * Creates (or re-issues, for a revoked row) one invite per selected household.
+ * The hash is what guest requests are checked against; the encrypted copy lets
+ * hosts copy or text the same link again later.
  */
 export async function generateInvites(
   eventId: string,
@@ -50,14 +52,16 @@ export async function generateInvites(
   const links: InviteLink[] = [];
   for (const h of hh) {
     const token = generateInviteToken();
+    const tokenHash = hashInviteToken(token);
+    const tokenEnc = encryptToken(token);
     await db
       .insert(schema.eventInvites)
-      .values({ eventId, householdId: h.id, tokenHash: hashInviteToken(token) })
+      .values({ eventId, householdId: h.id, tokenHash, tokenEnc })
       .onConflictDoUpdate({
         target: [schema.eventInvites.eventId, schema.eventInvites.householdId],
-        set: { tokenHash: hashInviteToken(token), revokedAt: null, createdAt: new Date() },
+        set: { tokenHash, tokenEnc, revokedAt: null, createdAt: new Date() },
       });
-    links.push({ householdName: h.name, url: `${base}/e/${token}` });
+    links.push({ householdName: h.name, url: inviteUrl(base, token) });
   }
   await db.insert(schema.auditLog).values({
     actor: host.email,
@@ -72,17 +76,16 @@ export async function generateInvites(
 export async function regenerateInvite(inviteId: string): Promise<InviteState> {
   const host = await requireHost();
   const db = await getDb();
-  const token = generateInviteToken();
   const [row] = await db
-    .update(schema.eventInvites)
-    .set({ tokenHash: hashInviteToken(token), revokedAt: null })
-    .where(eq(schema.eventInvites.id, inviteId))
-    .returning({ eventId: schema.eventInvites.eventId, householdId: schema.eventInvites.householdId });
+    .select({
+      eventId: schema.eventInvites.eventId,
+      householdName: schema.households.name,
+    })
+    .from(schema.eventInvites)
+    .innerJoin(schema.households, eq(schema.eventInvites.householdId, schema.households.id))
+    .where(eq(schema.eventInvites.id, inviteId));
   if (!row) return { error: "Invite not found." };
-  const [h] = await db
-    .select({ name: schema.households.name })
-    .from(schema.households)
-    .where(eq(schema.households.id, row.householdId));
+  const token = await rotateInviteToken(inviteId);
   await db.insert(schema.auditLog).values({
     actor: host.email,
     eventId: row.eventId,
@@ -91,7 +94,7 @@ export async function regenerateInvite(inviteId: string): Promise<InviteState> {
   });
   revalidateGuests(row.eventId);
   const base = await getBaseUrl();
-  return { links: [{ householdName: h?.name ?? "Household", url: `${base}/e/${token}` }] };
+  return { links: [{ householdName: row.householdName, url: inviteUrl(base, token) }] };
 }
 
 export async function revokeInvite(formData: FormData): Promise<void> {
@@ -102,7 +105,7 @@ export async function revokeInvite(formData: FormData): Promise<void> {
   const db = await getDb();
   await db
     .update(schema.eventInvites)
-    .set({ revokedAt: new Date() })
+    .set({ revokedAt: new Date(), tokenEnc: null })
     .where(and(eq(schema.eventInvites.id, inviteId), eq(schema.eventInvites.eventId, eventId)));
   await db.insert(schema.auditLog).values({
     actor: host.email,

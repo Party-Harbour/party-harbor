@@ -1,0 +1,21 @@
+import { NextResponse, type NextRequest } from "next/server";
+import { getCurrentHost } from "@/lib/auth";
+import { runDueJobs } from "@/lib/messaging/dispatcher";
+
+/**
+ * Heartbeat endpoint for an external scheduler (Vercel Cron, a systemd timer,
+ * curl in a loop). It only *triggers* the dispatcher; the jobs table is the
+ * source of truth, so a missed tick loses nothing.
+ */
+async function handle(req: NextRequest) {
+  const secret = process.env.CRON_SECRET;
+  const presented =
+    req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? req.headers.get("x-cron-secret");
+  const authorized = (secret && presented === secret) || (await getCurrentHost()) !== null;
+  if (!authorized) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const stats = await runDueJobs();
+  return NextResponse.json({ ok: true, ...stats });
+}
+
+export const GET = handle;
+export const POST = handle;

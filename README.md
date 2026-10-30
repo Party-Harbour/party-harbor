@@ -37,9 +37,17 @@ If the project folder is inside OneDrive (or Dropbox, iCloud…), set `PGLITE_DA
 - Hosts can record replies received by phone, manage tasks per event, and manage contribution slots
 - Contest voting (one contest per event): guests enter their bakes from their link, hosts approve entries and freeze the ballot, open voting, see a live tally, close and reveal. One vote per household per category (database-enforced), self-vote policy, eligibility by RSVP, ties shared, every status change audited.
 
+- Messaging: compose to a segment (everyone, no reply yet, attending, not declined) with placeholders, send now or schedule at a time or relative to the event (reminders move if the date moves). Durable per-recipient jobs with idempotency keys, retries with backoff, dead-letter and retry, quiet hours (21:00–08:00 event time), consent enforced (adults with a number and recorded opt-in only), delivery log, STOP/START handling on the inbound webhook. Local provider logs texts to the console; Twilio adapter behind the same interface.
+
+## Messaging locally
+
+With `MESSAGING_PROVIDER` unset, outgoing texts are printed to the dev server console instead of sent. Due messages go out once a minute while the server runs (an in-process heartbeat), or when something calls `/api/cron/dispatch` (a host session or `CRON_SECRET`). To send for real, set the Twilio variables in `.env.local` and point Twilio's inbound SMS webhook at `/api/sms/inbound`. Carrier A2P registration applies before texting anyone outside your household.
+
+Invitation links are stored hashed for lookups plus encrypted for resending; the key is generated next to the database folder (or set `INVITE_TOKEN_KEY`).
+
 ## Not built yet (per the PRD phases)
 
-Messaging (SMS/WhatsApp) and automation jobs, photo gallery (including entry photos), event templates/cloning, host digests, the external agent API, SMS reply voting, and multi-host co-host permissions. Hosting on Vercel/Supabase is a later step; the schema is plain Postgres so the move is a driver swap.
+WhatsApp and email adapters, host digests, photo gallery (including entry photos), event templates/cloning, the external agent API, SMS reply voting, and multi-host co-host permissions. Hosting on Vercel/Supabase is a later step; the schema is plain Postgres so the move is a driver swap.
 
 ## Project layout
 

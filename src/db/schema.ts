@@ -108,6 +108,9 @@ export const eventInvites = pgTable(
       .notNull()
       .references(() => households.id, { onDelete: "cascade" }),
     tokenHash: text("token_hash").notNull().unique(),
+    // AES-GCM copy of the raw token so hosts can resend a link by SMS without
+    // rotating it. Key comes from INVITE_TOKEN_KEY or a generated local file.
+    tokenEnc: text("token_enc"),
     expiresAt: ts("expires_at"),
     revokedAt: ts("revoked_at"),
     createdAt: ts("created_at").notNull().defaultNow(),
@@ -255,6 +258,81 @@ export const votes = pgTable(
   (t) => [uniqueIndex("votes_category_invite").on(t.categoryId, t.inviteId)],
 );
 
+export const messageSegment = pgEnum("message_segment", [
+  "all_invited",
+  "pending_rsvp",
+  "attending",
+  "not_declined",
+]);
+export const messageStatus = pgEnum("message_status", ["scheduled", "sending", "sent", "cancelled"]);
+export const jobState = pgEnum("job_state", [
+  "queued",
+  "sending",
+  "sent",
+  "failed",
+  "dead",
+  "cancelled",
+  "skipped",
+]);
+
+/** A host-authored message to a segment of an event's guests, sent now or on a schedule. */
+export const messages = pgTable("messages", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  eventId: uuid("event_id")
+    .notNull()
+    .references(() => events.id, { onDelete: "cascade" }),
+  createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+  label: text("label").notNull(),
+  channel: text("channel").notNull().default("sms"),
+  segment: messageSegment("segment").notNull().default("all_invited"),
+  body: text("body").notNull(),
+  scheduledAt: ts("scheduled_at").notNull(),
+  // When set, scheduledAt is derived from the event start and follows it if the date moves.
+  relativeDays: integer("relative_days"),
+  relativeTime: text("relative_time"),
+  status: messageStatus("status").notNull().default("scheduled"),
+  createdAt: ts("created_at").notNull().defaultNow(),
+  updatedAt: ts("updated_at").notNull().defaultNow(),
+});
+
+/** One durable job per recipient. The dispatcher only ever works from this table. */
+export const messageJobs = pgTable("message_jobs", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  messageId: uuid("message_id")
+    .notNull()
+    .references(() => messages.id, { onDelete: "cascade" }),
+  eventId: uuid("event_id")
+    .notNull()
+    .references(() => events.id, { onDelete: "cascade" }),
+  contactId: uuid("contact_id").references(() => contacts.id, { onDelete: "set null" }),
+  inviteId: uuid("invite_id").references(() => eventInvites.id, { onDelete: "set null" }),
+  recipientName: text("recipient_name").notNull(),
+  toPhone: text("to_phone"),
+  body: text("body").notNull(),
+  scheduledAt: ts("scheduled_at").notNull(),
+  state: jobState("state").notNull().default("queued"),
+  attempts: integer("attempts").notNull().default(0),
+  nextAttemptAt: ts("next_attempt_at").notNull(),
+  lastError: text("last_error"),
+  skipReason: text("skip_reason"),
+  idempotencyKey: text("idempotency_key").notNull().unique(),
+  sentAt: ts("sent_at"),
+  createdAt: ts("created_at").notNull().defaultNow(),
+  updatedAt: ts("updated_at").notNull().defaultNow(),
+});
+
+export const messageDeliveries = pgTable("message_deliveries", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  jobId: uuid("job_id")
+    .notNull()
+    .references(() => messageJobs.id, { onDelete: "cascade" }),
+  provider: text("provider").notNull(),
+  providerMessageId: text("provider_message_id"),
+  status: text("status").notNull(),
+  error: text("error"),
+  createdAt: ts("created_at").notNull().defaultNow(),
+});
+
 export const auditLog = pgTable("audit_log", {
   id: uuid("id").primaryKey().defaultRandom(),
   actor: text("actor").notNull(),
@@ -278,7 +356,11 @@ export type ContestCategory = typeof contestCategories.$inferSelect;
 export type ContestEntry = typeof contestEntries.$inferSelect;
 export type Vote = typeof votes.$inferSelect;
 
+export type Message = typeof messages.$inferSelect;
+export type MessageJob = typeof messageJobs.$inferSelect;
+
 export const EVENT_THEMES = eventTheme.enumValues;
+export const MESSAGE_SEGMENTS = messageSegment.enumValues;
 export const CONTEST_STATUSES = contestStatus.enumValues;
 export const SELF_VOTE_POLICIES = selfVotePolicy.enumValues;
 export const VOTER_ELIGIBILITIES = voterEligibility.enumValues;

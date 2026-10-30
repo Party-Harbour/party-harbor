@@ -32,7 +32,7 @@ function LinkList({ state }: { state: InviteState }) {
   return (
     <div className="mt-4 rounded-lg bg-sage/30 p-3">
       <p className="mb-2 text-sm font-medium text-navy">
-        New links. Copy them now: only a fingerprint is stored, so they won&apos;t be shown again.
+        Links are ready. They also stay available on each household below, and in messages.
       </p>
       <ul className="space-y-2">
         {state.links.map((l) => (

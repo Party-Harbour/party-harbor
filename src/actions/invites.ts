@@ -8,6 +8,7 @@ import { requireHost } from "@/lib/auth";
 import { getBaseUrl } from "@/lib/base-url";
 import { inviteUrl, rotateInviteToken } from "@/lib/invite-links";
 import { encryptToken } from "@/lib/messaging/crypto";
+import { backfillJobsForInvites } from "@/lib/messaging/queue";
 import { generateInviteToken, hashInviteToken } from "@/lib/tokens";
 import { int, str } from "@/lib/action-state";
 
@@ -37,10 +38,7 @@ export async function generateInvites(
   if (householdIds.length === 0) return { error: "Select at least one household." };
 
   const db = await getDb();
-  const [event] = await db
-    .select({ id: schema.events.id })
-    .from(schema.events)
-    .where(eq(schema.events.id, eventId));
+  const [event] = await db.select().from(schema.events).where(eq(schema.events.id, eventId));
   if (!event) return { error: "Event not found." };
 
   const hh = await db
@@ -50,17 +48,20 @@ export async function generateInvites(
 
   const base = await getBaseUrl();
   const links: InviteLink[] = [];
+  const inviteIds: string[] = [];
   for (const h of hh) {
     const token = generateInviteToken();
     const tokenHash = hashInviteToken(token);
     const tokenEnc = encryptToken(token);
-    await db
+    const [row] = await db
       .insert(schema.eventInvites)
       .values({ eventId, householdId: h.id, tokenHash, tokenEnc })
       .onConflictDoUpdate({
         target: [schema.eventInvites.eventId, schema.eventInvites.householdId],
         set: { tokenHash, tokenEnc, revokedAt: null, createdAt: new Date() },
-      });
+      })
+      .returning({ id: schema.eventInvites.id });
+    inviteIds.push(row.id);
     links.push({ householdName: h.name, url: inviteUrl(base, token) });
   }
   await db.insert(schema.auditLog).values({
@@ -69,6 +70,8 @@ export async function generateInvites(
     action: "invite.generated",
     metadata: { households: hh.map((h) => h.id) },
   });
+  // Reminders already on the calendar now include these households.
+  await backfillJobsForInvites({ event, inviteIds, hostName: host.displayName, hostEmail: host.email, baseUrl: base });
   revalidateGuests(eventId);
   return { links };
 }

@@ -41,6 +41,8 @@ If the project folder is inside OneDrive (or Dropbox, iCloud…), set `PGLITE_DA
 
 - Photo gallery per event: hosts and invited guests upload photos (plain forms, up to 12 at a time); files are checked by decoding them, auto-rotated, resized to 2000px, stripped of EXIF/GPS, and stored outside the database with a WebP thumbnail. Hosts set guest access (hidden / view / view and add), choose whether guest photos wait for approval, hide, delete, download, pick a cover photo, and see storage against a per-event cap. Guests see who added each photo, can remove their own, and can attach a photo to their contest entry, which then shows on the ballot and in results. Every image is served through an authenticated proxy (host session or invitation token); only the cover photo is public.
 
+- Event templates and cloning: any event can be saved as a template or cloned for next time. A template carries settings, contribution slots, tasks, the contest set-up and reminders scheduled relative to the date, never guests, RSVPs, claims, entries, votes or photos. Three starter templates from the PRD (Christmas Cookie Exchange, Carnival, Fall Bonfire) are built in. Creating from a template lays everything out against the date you pick; cloning suggests the same time a year on. Households invited after a reminder is scheduled are added to it automatically.
+
 ## Photos locally
 
 Uploads go to `UPLOAD_DIR` (default `./data/uploads`, gitignored); keep it outside synced folders like the database. `GALLERY_MAX_PHOTOS` caps each event (default 500). Phones usually send HEIC as JPEG through the browser; if a raw HEIC gets through, the upload is refused with a clear message.
@@ -53,7 +55,7 @@ Invitation links are stored hashed for lookups plus encrypted for resending; the
 
 ## Not built yet (per the PRD phases)
 
-WhatsApp and email adapters, host digests, gallery ZIP export and retention expiry, event templates/cloning, the external agent API, SMS reply voting, and multi-host co-host permissions. Hosting on Vercel/Supabase is a later step; the schema is plain Postgres so the move is a driver swap.
+WhatsApp and email adapters, host digests, gallery ZIP export and retention expiry, the external agent API, SMS reply voting, and multi-host co-host permissions. Hosting on Vercel/Supabase is a later step; the schema is plain Postgres so the move is a driver swap.
 
 ## Project layout
 
@@ -64,7 +66,7 @@ src/app/login/       host sign-in
 src/actions/         server actions (all host actions call requireHost)
 src/db/schema.ts     Drizzle schema (Postgres)
 src/db/seed.ts       first-run synthetic data
-src/lib/             auth, tokens, dates, queries, messaging/, gallery/
+src/lib/             auth, tokens, dates, queries, messaging/, gallery/, templates/ (snapshot shape, starters, apply)
 src/app/api/         upload + photo proxy, cron dispatch, inbound SMS
 drizzle/             generated SQL migrations (run automatically at startup)
 ```

@@ -8,6 +8,7 @@ const items = [
   { href: "/dashboard", label: "Dashboard", icon: Icon.Home },
   { href: "/events", label: "Events", icon: Icon.Calendar },
   { href: "/contacts", label: "Contacts", icon: Icon.Users },
+  { href: "/templates", label: "Templates", icon: Icon.Layers },
 ];
 
 export function SidebarNav() {
@@ -40,7 +41,7 @@ export function BottomNav() {
   return (
     <nav
       aria-label="Primary"
-      className="fixed inset-x-0 bottom-0 z-10 grid grid-cols-3 border-t border-navy/10 bg-white pb-[env(safe-area-inset-bottom)] lg:hidden"
+      className="fixed inset-x-0 bottom-0 z-10 grid grid-cols-4 border-t border-navy/10 bg-white pb-[env(safe-area-inset-bottom)] lg:hidden"
     >
       {items.map((n) => {
         const active = pathname === n.href || pathname.startsWith(n.href + "/");

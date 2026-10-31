@@ -369,6 +369,23 @@ export const photos = pgTable("photos", {
   createdAt: ts("created_at").notNull().defaultNow(),
 });
 
+/**
+ * A reusable event plan (PRD FR-11): settings, contribution slots, tasks,
+ * contest set-up and relative message rules, captured as a JSON snapshot.
+ * Never guest data: invites, RSVPs, claims, entries, votes and photos stay
+ * with the event they belong to. See src/lib/templates for the shape.
+ */
+export const eventTemplates = pgTable("event_templates", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  description: text("description"),
+  sourceEventId: uuid("source_event_id").references(() => events.id, { onDelete: "set null" }),
+  snapshot: jsonb("snapshot").notNull(),
+  createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: ts("created_at").notNull().defaultNow(),
+  updatedAt: ts("updated_at").notNull().defaultNow(),
+});
+
 export const auditLog = pgTable("audit_log", {
   id: uuid("id").primaryKey().defaultRandom(),
   actor: text("actor").notNull(),
@@ -392,6 +409,7 @@ export type ContestCategory = typeof contestCategories.$inferSelect;
 export type ContestEntry = typeof contestEntries.$inferSelect;
 export type Vote = typeof votes.$inferSelect;
 export type Photo = typeof photos.$inferSelect;
+export type EventTemplate = typeof eventTemplates.$inferSelect;
 
 export type Message = typeof messages.$inferSelect;
 export type MessageJob = typeof messageJobs.$inferSelect;

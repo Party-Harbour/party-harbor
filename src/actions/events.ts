@@ -6,8 +6,10 @@ import { redirect } from "next/navigation";
 import { getDb, schema } from "@/db";
 import { EVENT_STATUSES, EVENT_THEMES, type Event } from "@/db/schema";
 import { requireHost } from "@/lib/auth";
+import { getBaseUrl } from "@/lib/base-url";
 import { isValidTimeZone, wallToUtc } from "@/lib/dates";
 import { rescheduleRelativeMessages } from "@/lib/messaging/queue";
+import { applySnapshot, derivedTimes, resolveTemplateRef } from "@/lib/templates";
 import { optional, str, type ActionState } from "@/lib/action-state";
 
 type EventValues = Pick<
@@ -73,19 +75,43 @@ export async function createEvent(_prev: ActionState, formData: FormData): Promi
   const parsed = parseEventForm(formData);
   if ("error" in parsed) return { error: parsed.error };
 
+  // Starting from a template or cloning an event (PRD FR-11): the form holds
+  // the details, the snapshot holds the plan that gets set up after insert.
+  const templateRef = optional(formData, "templateRef");
+  const source = templateRef ? await resolveTemplateRef(templateRef) : null;
+  if (templateRef && !source) return { error: "That template no longer exists. Start again from Templates." };
+
+  const values = { ...parsed.values };
+  const extra: Partial<Event> = {};
+  if (source) {
+    const derived = derivedTimes(source.snapshot, values);
+    if (!values.endsAt) values.endsAt = derived.endsAt;
+    if (!values.rsvpDeadline) values.rsvpDeadline = derived.rsvpDeadline;
+    extra.galleryPolicy = source.snapshot.event.galleryPolicy;
+    extra.galleryAutoApprove = source.snapshot.event.galleryAutoApprove;
+  }
+
   const db = await getDb();
   const [created] = await db
     .insert(schema.events)
-    .values({ ...parsed.values, createdBy: host.id })
-    .returning({ id: schema.events.id });
+    .values({ ...values, ...extra, createdBy: host.id })
+    .returning();
   await db.insert(schema.auditLog).values({
     actor: host.email,
     eventId: created.id,
     action: "event.created",
-    metadata: { title: parsed.values.title },
+    metadata: { title: values.title, from: source?.ref ?? null },
   });
+
+  let query = "";
+  if (source) {
+    const applied = await applySnapshot({ event: created, snapshot: source.snapshot, host, baseUrl: await getBaseUrl() });
+    const params = new URLSearchParams({ setup: source.name });
+    if (applied.pastMessages) params.set("skipped", String(applied.pastMessages));
+    query = `?${params}`;
+  }
   revalidateEvent(created.id);
-  redirect(`/events/${created.id}`);
+  redirect(`/events/${created.id}${query}`);
 }
 
 export async function updateEvent(

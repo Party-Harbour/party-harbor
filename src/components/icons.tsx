@@ -144,6 +144,13 @@ export const Icon = {
       <circle cx="12" cy="13" r="3.5" />
     </Svg>
   ),
+  Layers: (p: IconProps) => (
+    <Svg {...p}>
+      <path d="m12 3 9 5-9 5-9-5 9-5Z" />
+      <path d="m3 12 9 5 9-5" />
+      <path d="m3 16 9 5 9-5" />
+    </Svg>
+  ),
   Cookie: (p: IconProps) => (
     <Svg {...p}>
       <path d="M12 3a9 9 0 1 0 9 9 4 4 0 0 1-4.5-4.5A4 4 0 0 1 12 3Z" />

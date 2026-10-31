@@ -127,7 +127,31 @@ export async function enqueueMessage(input: {
     .returning();
 
   const recipients = await resolveRecipients(event.id, input.segment);
-  const needsLink = usesLink(input.body);
+  const { queued, skipped } = await createJobs({ event, message, hostName: input.hostName, baseUrl: input.baseUrl }, recipients);
+
+  // Nothing to do and no one still to come: done. A future message with no
+  // recipients yet stays scheduled so households invited later get a job
+  // (see backfillJobsForInvites); that's how a template's reminders work on
+  // an event that has no guests on day one.
+  if (queued === 0 && scheduledAt.getTime() <= Date.now()) {
+    await db.update(messages).set({ status: "sent", updatedAt: new Date() }).where(eq(messages.id, message.id));
+  }
+  await db.insert(schema.auditLog).values({
+    actor: input.hostEmail,
+    eventId: event.id,
+    action: "message.queued",
+    metadata: { messageId: message.id, label: input.label, segment: input.segment, queued, skipped, scheduledAt, deferred },
+  });
+  return { message, queued, skipped, deferred };
+}
+
+type JobContext = { event: Event; message: Message; hostName: string; baseUrl: string };
+
+/** One job per recipient, rendered for them. Idempotent on (message, contact). */
+async function createJobs(ctx: JobContext, recipients: Recipient[]): Promise<{ queued: number; skipped: number }> {
+  const db = await getDb();
+  const { event, message } = ctx;
+  const needsLink = usesLink(message.body);
   // One token per household, however many adults it has.
   const tokenByInvite = new Map<string, string>();
   const linkFor = async (inviteId: string) => {
@@ -136,14 +160,14 @@ export async function enqueueMessage(input: {
       token = await ensureInviteToken({ id: inviteId });
       tokenByInvite.set(inviteId, token);
     }
-    return inviteUrl(input.baseUrl, token);
+    return inviteUrl(ctx.baseUrl, token);
   };
   let queued = 0;
   let skipped = 0;
   for (const r of recipients) {
     const skipReason = skipReasonFor(r.contact);
     const link = needsLink && !skipReason ? await linkFor(r.invite.id) : "";
-    const body = renderTemplate(input.body, {
+    const body = renderTemplate(message.body, {
       first_name: r.contact.displayName.split(/\s+/)[0] ?? r.contact.displayName,
       household: r.household.name,
       event: event.title,
@@ -151,7 +175,7 @@ export async function enqueueMessage(input: {
       time: formatTime(event.startsAt, event.timezone),
       venue: event.venueName ?? "",
       link,
-      host: input.hostName,
+      host: ctx.hostName,
     });
     const inserted = await db
       .insert(messageJobs)
@@ -163,8 +187,8 @@ export async function enqueueMessage(input: {
         recipientName: `${r.contact.displayName} (${r.household.name})`,
         toPhone: r.contact.phoneE164,
         body,
-        scheduledAt,
-        nextAttemptAt: scheduledAt,
+        scheduledAt: message.scheduledAt,
+        nextAttemptAt: message.scheduledAt,
         state: skipReason ? "skipped" : "queued",
         skipReason,
         idempotencyKey: `${message.id}:${r.contact.id}`,
@@ -175,17 +199,43 @@ export async function enqueueMessage(input: {
     if (skipReason) skipped++;
     else queued++;
   }
+  return { queued, skipped };
+}
 
-  if (queued === 0) {
-    await db.update(messages).set({ status: "sent", updatedAt: new Date() }).where(eq(messages.id, message.id));
+/**
+ * Households invited after a message was scheduled still get it, as long as
+ * it hasn't gone out yet and their RSVP state fits the segment.
+ */
+export async function backfillJobsForInvites(input: {
+  event: Event;
+  inviteIds: string[];
+  hostName: string;
+  hostEmail: string;
+  baseUrl: string;
+}): Promise<number> {
+  if (input.inviteIds.length === 0) return 0;
+  const db = await getDb();
+  const wanted = new Set(input.inviteIds);
+  const pending = await db
+    .select()
+    .from(messages)
+    .where(and(eq(messages.eventId, input.event.id), eq(messages.status, "scheduled")));
+  let added = 0;
+  for (const message of pending) {
+    if (message.scheduledAt.getTime() <= Date.now()) continue;
+    const recipients = (await resolveRecipients(input.event.id, message.segment)).filter((r) => wanted.has(r.invite.id));
+    const { queued } = await createJobs({ event: input.event, message, hostName: input.hostName, baseUrl: input.baseUrl }, recipients);
+    added += queued;
   }
-  await db.insert(schema.auditLog).values({
-    actor: input.hostEmail,
-    eventId: event.id,
-    action: "message.queued",
-    metadata: { messageId: message.id, label: input.label, segment: input.segment, queued, skipped, scheduledAt, deferred },
-  });
-  return { message, queued, skipped, deferred };
+  if (added > 0) {
+    await db.insert(schema.auditLog).values({
+      actor: input.hostEmail,
+      eventId: input.event.id,
+      action: "message.backfilled",
+      metadata: { invites: input.inviteIds, jobs: added },
+    });
+  }
+  return added;
 }
 
 export async function cancelMessage(messageId: string, eventId: string, actor: string): Promise<void> {

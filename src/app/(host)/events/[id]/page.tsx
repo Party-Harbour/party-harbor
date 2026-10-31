@@ -1,6 +1,9 @@
 import { notFound } from "next/navigation";
 import { setEventStatus } from "@/actions/events";
-import { Button, Card, EVENT_STATUS_LABEL, LinkButton, SectionTitle, Stat } from "@/components/ui";
+import { saveEventAsTemplate } from "@/actions/templates";
+import { ActionForm } from "@/components/action-form";
+import { Icon } from "@/components/icons";
+import { Button, Card, EVENT_STATUS_LABEL, Field, LinkButton, SectionTitle, Stat } from "@/components/ui";
 import type { Event } from "@/db/schema";
 import { formatDateTime } from "@/lib/dates";
 import { CONTEST_STATUS_LABEL, getContestView } from "@/lib/contest";
@@ -15,8 +18,9 @@ const NEXT_STATUS: Partial<Record<Event["status"], Event["status"][]>> = {
   archived: ["memories"],
 };
 
-export default async function EventOverviewPage({ params }: PageProps<"/events/[id]">) {
+export default async function EventOverviewPage({ params, searchParams }: PageProps<"/events/[id]">) {
   const { id } = await params;
+  const { setup, skipped } = await searchParams;
   const summaries = await listEventSummaries();
   const event = summaries.find((e) => e.id === id);
   if (!event) notFound();
@@ -32,6 +36,14 @@ export default async function EventOverviewPage({ params }: PageProps<"/events/[
   return (
     <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
       <div className="space-y-6">
+        {typeof setup === "string" && setup ? (
+          <p role="status" className="rounded-md bg-sage/40 px-3 py-2 text-sm text-navy">
+            Set up from “{setup}”. Have a look at the Tasks, Contributions, Contest and Messages tabs and change anything you like.
+            {typeof skipped === "string" && Number(skipped) > 0
+              ? ` ${skipped} scheduled message${skipped === "1" ? " was" : "s were"} left out because its send time has already passed.`
+              : ""}
+          </p>
+        ) : null}
         <section>
           <SectionTitle>At a glance</SectionTitle>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -137,6 +149,24 @@ export default async function EventOverviewPage({ params }: PageProps<"/events/[
               All tasks
             </LinkButton>
           </div>
+        </Card>
+
+        <Card>
+          <SectionTitle>Reuse this plan</SectionTitle>
+          <p className="text-sm text-navy/70">
+            Settings, tasks, contribution slots, the contest set-up and reminders tied to the date. Guests, RSVPs, entries and photos stay here.
+          </p>
+          <div className="mt-3">
+            <LinkButton href={`/events/new?from=${event.id}`} variant="secondary">
+              <Icon.Layers size={16} /> Clone for next time
+            </LinkButton>
+          </div>
+          <ActionForm action={saveEventAsTemplate.bind(null, event.id)} className="mt-4 space-y-2">
+            <Field label="Save as a template" name="name" defaultValue={event.title} maxLength={120} placeholder="Template name" />
+            <Button type="submit" variant="ghost" className="border border-navy/20">
+              Save template
+            </Button>
+          </ActionForm>
         </Card>
       </div>
     </div>

@@ -35,6 +35,8 @@ export const consentState = pgEnum("consent_state", [
   "opted_out",
 ]);
 export const userRole = pgEnum("user_role", ["owner", "cohost"]);
+export const digestFrequency = pgEnum("digest_frequency", ["off", "daily", "weekly"]);
+export const digestStatus = pgEnum("digest_status", ["ready", "sent", "failed"]);
 export const eventTheme = pgEnum("event_theme", ["coastal", "sunset", "celebration", "earth"]);
 // hidden: no gallery on the guest page; view: guests see approved photos;
 // contribute: guests can also upload (PRD section 11 "gallery_policy").
@@ -49,8 +51,41 @@ export const users = pgTable("users", {
   displayName: text("display_name").notNull(),
   passwordHash: text("password_hash").notNull(),
   role: userRole("role").notNull().default("owner"),
+  // Host digest (PRD FR-12): a summary of RSVPs, tasks, contributions and
+  // alerts, texted to phoneE164 when set and always readable in the app.
+  phoneE164: text("phone_e164"),
+  timezone: text("timezone").notNull().default("America/New_York"),
+  digestFrequency: digestFrequency("digest_frequency").notNull().default("daily"),
+  digestHour: integer("digest_hour").notNull().default(8),
+  // 0 = Sunday … 6 = Saturday; used when the frequency is weekly.
+  digestWeekday: integer("digest_weekday").notNull().default(1),
   createdAt: ts("created_at").notNull().defaultNow(),
 });
+
+/** One generated digest per host per period (or a manual one). */
+export const digests = pgTable(
+  "digests",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // "2026-10-31" (daily), "week-2026-10-26" (weekly) or "manual:<ts>".
+    periodKey: text("period_key").notNull(),
+    trigger: text("trigger").notNull().default("scheduled"),
+    // What the digest covered: everything since the previous one.
+    since: ts("since"),
+    summary: jsonb("summary").notNull(),
+    body: text("body").notNull(),
+    status: digestStatus("status").notNull().default("ready"),
+    toPhone: text("to_phone"),
+    providerMessageId: text("provider_message_id"),
+    error: text("error"),
+    createdAt: ts("created_at").notNull().defaultNow(),
+    sentAt: ts("sent_at"),
+  },
+  (t) => [uniqueIndex("digests_user_period").on(t.userId, t.periodKey)],
+);
 
 export const sessions = pgTable("sessions", {
   id: text("id").primaryKey(),
@@ -410,6 +445,8 @@ export type ContestEntry = typeof contestEntries.$inferSelect;
 export type Vote = typeof votes.$inferSelect;
 export type Photo = typeof photos.$inferSelect;
 export type EventTemplate = typeof eventTemplates.$inferSelect;
+export type Digest = typeof digests.$inferSelect;
+export const DIGEST_FREQUENCIES = digestFrequency.enumValues;
 
 export type Message = typeof messages.$inferSelect;
 export type MessageJob = typeof messageJobs.$inferSelect;

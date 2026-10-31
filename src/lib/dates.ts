@@ -99,6 +99,15 @@ export function countdownLabel(date: Date, timeZone: string, now = new Date()): 
   return `In ${d} days`;
 }
 
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+export const WEEKDAY_LABEL = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+/** Day of the week (0 = Sunday) for `date` in `timeZone`. */
+export function weekdayIn(date: Date, timeZone: string): number {
+  const short = new Intl.DateTimeFormat("en-US", { timeZone, weekday: "short" }).format(date);
+  return Math.max(0, WEEKDAYS.indexOf(short));
+}
+
 export function isValidTimeZone(tz: string): boolean {
   try {
     new Intl.DateTimeFormat("en-US", { timeZone: tz });

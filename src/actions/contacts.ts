@@ -6,16 +6,7 @@ import { getDb, schema } from "@/db";
 import { CONSENT_STATES, type Contact } from "@/db/schema";
 import { requireHost } from "@/lib/auth";
 import { optional, str, type ActionState } from "@/lib/action-state";
-
-/** Loose US-centric normalisation to E.164. Returns null when unusable. */
-function normalizePhone(raw: string | null): string | null {
-  if (!raw) return null;
-  const digits = raw.replace(/[^\d+]/g, "");
-  if (digits.startsWith("+")) return digits.length >= 8 ? digits : null;
-  if (digits.length === 10) return `+1${digits}`;
-  if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
-  return null;
-}
+import { normalizePhone } from "@/lib/phone";
 
 export async function createHousehold(_prev: ActionState, formData: FormData): Promise<ActionState> {
   await requireHost();

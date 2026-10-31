@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentHost } from "@/lib/auth";
+import { runDueDigests } from "@/lib/digest";
 import { runDueJobs } from "@/lib/messaging/dispatcher";
 
 /**
@@ -14,7 +15,8 @@ async function handle(req: NextRequest) {
   const authorized = (secret && presented === secret) || (await getCurrentHost()) !== null;
   if (!authorized) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const stats = await runDueJobs();
-  return NextResponse.json({ ok: true, ...stats });
+  const digests = await runDueDigests();
+  return NextResponse.json({ ok: true, ...stats, digests });
 }
 
 export const GET = handle;

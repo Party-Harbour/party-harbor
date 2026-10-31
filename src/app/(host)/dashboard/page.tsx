@@ -144,6 +144,7 @@ export default async function DashboardPage() {
             <div className="grid gap-2">
               <QuickAction href="/events/new" icon={<Icon.Plus size={16} />}>New event</QuickAction>
               <QuickAction href="/contacts" icon={<Icon.Users size={16} />}>Add a household</QuickAction>
+              <QuickAction href="/digest" icon={<Icon.Mail size={16} />}>Today&apos;s digest</QuickAction>
               {next ? (
                 <QuickAction href={`/events/${next.id}/guests`} icon={<Icon.Link size={16} />}>
                   Invite guests to {next.title}

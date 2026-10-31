@@ -43,19 +43,21 @@ If the project folder is inside OneDrive (or Dropbox, iCloud…), set `PGLITE_DA
 
 - Event templates and cloning: any event can be saved as a template or cloned for next time. A template carries settings, contribution slots, tasks, the contest set-up and reminders scheduled relative to the date, never guests, RSVPs, claims, entries, votes or photos. Three starter templates from the PRD (Christmas Cookie Exchange, Carnival, Fall Bonfire) are built in. Creating from a template lays everything out against the date you pick; cloning suggests the same time a year on. Households invited after a reminder is scheduled are added to it automatically.
 
+- Host digest: each host gets a summary of every live event (RSVPs and headcount, open and overdue tasks, unfilled sign-up slots, contest state, new photos, texts going out today) plus what changed since the last digest and a list of things that need a look (overdue tasks, passed RSVP deadlines, undeliverable texts, photos or entries awaiting approval, drafts close to the date). Daily or weekly at an hour you choose in your own time zone, texted through the messaging provider when you add a mobile number, always readable on the Digest page with history. One per period however often the heartbeat runs; "Send me a digest" works any time.
+
 ## Photos locally
 
 Uploads go to `UPLOAD_DIR` (default `./data/uploads`, gitignored); keep it outside synced folders like the database. `GALLERY_MAX_PHOTOS` caps each event (default 500). Phones usually send HEIC as JPEG through the browser; if a raw HEIC gets through, the upload is refused with a clear message.
 
 ## Messaging locally
 
-With `MESSAGING_PROVIDER` unset, outgoing texts are printed to the dev server console instead of sent. Due messages go out once a minute while the server runs (an in-process heartbeat), or when something calls `/api/cron/dispatch` (a host session or `CRON_SECRET`). To send for real, set the Twilio variables in `.env.local` and point Twilio's inbound SMS webhook at `/api/sms/inbound`. Carrier A2P registration applies before texting anyone outside your household.
+With `MESSAGING_PROVIDER` unset, outgoing texts are printed to the dev server console instead of sent. Due messages and host digests go out once a minute while the server runs (an in-process heartbeat), or when something calls `/api/cron/dispatch` (a host session or `CRON_SECRET`). Digest links use `NEXT_PUBLIC_APP_URL` when set, otherwise `http://localhost:3000`. To send for real, set the Twilio variables in `.env.local` and point Twilio's inbound SMS webhook at `/api/sms/inbound`. Carrier A2P registration applies before texting anyone outside your household.
 
 Invitation links are stored hashed for lookups plus encrypted for resending; the key is generated next to the database folder (or set `INVITE_TOKEN_KEY`).
 
 ## Not built yet (per the PRD phases)
 
-WhatsApp and email adapters, host digests, gallery ZIP export and retention expiry, the external agent API, SMS reply voting, and multi-host co-host permissions. Hosting on Vercel/Supabase is a later step; the schema is plain Postgres so the move is a driver swap.
+WhatsApp and email adapters (digests and guest messages are SMS or in-app for now), gallery ZIP export and retention expiry, the external agent API, SMS reply voting, and multi-host co-host permissions. Hosting on Vercel/Supabase is a later step; the schema is plain Postgres so the move is a driver swap.
 
 ## Project layout
 
@@ -66,7 +68,7 @@ src/app/login/       host sign-in
 src/actions/         server actions (all host actions call requireHost)
 src/db/schema.ts     Drizzle schema (Postgres)
 src/db/seed.ts       first-run synthetic data
-src/lib/             auth, tokens, dates, queries, messaging/, gallery/, templates/ (snapshot shape, starters, apply)
+src/lib/             auth, tokens, dates, queries, messaging/, gallery/, templates/, digest/ (build, render, schedule)
 src/app/api/         upload + photo proxy, cron dispatch, inbound SMS
 drizzle/             generated SQL migrations (run automatically at startup)
 ```

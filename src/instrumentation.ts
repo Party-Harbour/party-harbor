@@ -9,8 +9,10 @@ export async function register() {
   const g = globalThis as unknown as { __phHeartbeat?: ReturnType<typeof setInterval> };
   if (g.__phHeartbeat) return;
   const { runDueJobs } = await import("./lib/messaging/dispatcher");
+  const { runDueDigests } = await import("./lib/digest");
   g.__phHeartbeat = setInterval(() => {
     runDueJobs().catch((err) => console.error("[messaging heartbeat]", err));
+    runDueDigests().catch((err) => console.error("[digest heartbeat]", err));
   }, 60_000);
   g.__phHeartbeat.unref?.();
 }

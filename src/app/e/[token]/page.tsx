@@ -1,16 +1,20 @@
 import type { Metadata } from "next";
 import { and, eq } from "drizzle-orm";
 import { guestClaim, guestRsvp, guestUnclaim } from "@/actions/guest";
+import { guestRemovePhoto } from "@/actions/photos";
 import { ActionForm } from "@/components/action-form";
 import { Countdown } from "@/components/countdown";
 import { EventCover } from "@/components/event-cover";
 import { GuestContest } from "@/components/guest-contest";
 import { Icon } from "@/components/icons";
 import { LogoMark } from "@/components/logo";
+import { PhotoGrid, PhotoThumb, PhotoTile, smallDangerClass } from "@/components/photo-tile";
+import { PhotoUpload } from "@/components/photo-upload";
 import { Button, Field, RSVP_LABEL, TextArea, inputClass } from "@/components/ui";
 import { getDb, schema } from "@/db";
 import { getContestView, getGuestContestState } from "@/lib/contest";
 import { formatDate, formatTime } from "@/lib/dates";
+import { guestCanUpload, guestCanViewGallery, listEventPhotos } from "@/lib/gallery";
 import { guestCanRespond, resolveInvite } from "@/lib/guest";
 import { getEventContributions } from "@/lib/queries";
 import { getTheme, themeVars } from "@/lib/themes";
@@ -20,8 +24,9 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default async function GuestEventPage({ params }: PageProps<"/e/[token]">) {
+export default async function GuestEventPage({ params, searchParams }: PageProps<"/e/[token]">) {
   const { token } = await params;
+  const { photos: uploadedCount, photoError } = await searchParams;
   const resolved = await resolveInvite(token);
 
   if (!resolved) {
@@ -54,6 +59,92 @@ export default async function GuestEventPage({ params }: PageProps<"/e/[token]">
   const open = guestCanRespond(event);
   const tz = event.timezone;
   const replied = rsvp && rsvp.status !== "pending";
+
+  const canUpload = guestCanUpload(event);
+  const gallery = guestCanViewGallery(event) ? await listEventPhotos(event.id, ["visible", "pending"]) : [];
+  const visiblePhotos = gallery.filter((p) => p.state === "visible");
+  const myPending = gallery.filter((p) => p.state === "pending" && p.inviteId === invite.id);
+  const showGallery = guestCanViewGallery(event) && (visiblePhotos.length > 0 || canUpload);
+  const memories = event.status === "memories";
+  const galleryTitle = memories ? "Memories" : "Photos";
+  const gallerySection = showGallery ? (
+    <section id="photos" className="scroll-mt-4 rounded-3xl bg-white p-5 shadow-card ring-1 ring-navy/5 sm:p-6">
+      <h2 className="t-accent flex items-center gap-2 font-display text-2xl font-semibold">
+        <Icon.Camera size={22} /> {galleryTitle}
+      </h2>
+      <p className="mt-1 text-sm text-navy/70">
+        {memories
+          ? "Thanks for coming! Here are the photos so far."
+          : canUpload
+            ? "Snap something? Add it here for everyone at the party to see."
+            : "Photos the hosts have shared."}
+        {canUpload && !event.galleryAutoApprove ? " Photos appear once the hosts have had a look." : ""}
+      </p>
+      {uploadedCount ? (
+        <p role="status" className="mt-3 rounded-md bg-sage/40 px-3 py-2 text-sm text-navy">
+          {uploadedCount} photo{uploadedCount === "1" ? "" : "s"} added{event.galleryAutoApprove ? "" : ", waiting for the hosts"}. Thank you!
+        </p>
+      ) : null}
+      {photoError ? (
+        <p role="alert" className="mt-3 rounded-md bg-coral/20 px-3 py-2 text-sm text-navy">
+          {photoError}
+        </p>
+      ) : null}
+      {canUpload ? (
+        <div className="mt-4">
+          <PhotoUpload fields={{ token }} returnTo={`/e/${token}#photos`} buttonClass="t-btn" />
+        </div>
+      ) : null}
+      {myPending.length > 0 ? (
+        <div className="mt-4">
+          <h3 className="text-sm font-medium text-navy/70">Your photos waiting for the hosts</h3>
+          <ul className="mt-2 flex flex-wrap gap-2">
+            {myPending.map((p) => (
+              <li key={p.id} className="t-soft flex items-center gap-2 rounded-lg p-1.5 pr-2 text-xs">
+                <PhotoThumb id={p.id} token={token} className="h-12 w-12 rounded-md" />
+                <form action={guestRemovePhoto}>
+                  <input type="hidden" name="token" value={token} />
+                  <input type="hidden" name="photoId" value={p.id} />
+                  <button type="submit" className="text-coral-deep hover:underline">
+                    Remove
+                  </button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      {visiblePhotos.length > 0 ? (
+        <div className="mt-4">
+          <PhotoGrid>
+            {visiblePhotos.map((p) => (
+              <PhotoTile
+                key={p.id}
+                photo={p}
+                token={token}
+                byline={p.inviteId === invite.id ? "Yours" : p.uploaderName}
+                actions={
+                  p.inviteId === invite.id ? (
+                    <form action={guestRemovePhoto}>
+                      <input type="hidden" name="token" value={token} />
+                      <input type="hidden" name="photoId" value={p.id} />
+                      <button type="submit" className={smallDangerClass}>
+                        Remove
+                      </button>
+                    </form>
+                  ) : null
+                }
+              />
+            ))}
+          </PhotoGrid>
+        </div>
+      ) : (
+        <p className="mt-4 rounded-lg border border-dashed border-navy/20 px-4 py-5 text-center text-sm text-navy/60">
+          No photos yet{canUpload ? ". Be the first!" : "."}
+        </p>
+      )}
+    </section>
+  ) : null;
 
   return (
     <Shell style={themeVars(theme)}>
@@ -106,6 +197,7 @@ export default async function GuestEventPage({ params }: PageProps<"/e/[token]">
               event.whatToBring ? ["#bring", "What to bring"] : null,
               ["#signup", "Sign up to bring something"],
               contestView ? ["#contest", contestView.contest.title] : null,
+              showGallery ? ["#photos", galleryTitle] : null,
             ]
               .filter((x): x is [string, string] => x !== null)
               .map(([href, label]) => (
@@ -117,6 +209,8 @@ export default async function GuestEventPage({ params }: PageProps<"/e/[token]">
           </nav>
         </div>
       </section>
+
+      {memories ? gallerySection : null}
 
       <section id="rsvp" className="scroll-mt-4 rounded-3xl bg-white p-5 shadow-card ring-1 ring-navy/5 sm:p-6">
         <h2 className="t-accent font-display text-2xl font-semibold">Can you make it?</h2>
@@ -236,9 +330,11 @@ export default async function GuestEventPage({ params }: PageProps<"/e/[token]">
 
       {contestView && contestState ? (
         <div id="contest" className="scroll-mt-4">
-          <GuestContest token={token} view={contestView} state={contestState} inviteId={invite.id} />
+          <GuestContest token={token} view={contestView} state={contestState} inviteId={invite.id} canUpload={canUpload} />
         </div>
       ) : null}
+
+      {!memories ? gallerySection : null}
 
       <footer className="pt-2 text-center text-xs text-navy/50">
         This link is just for your household. Please don&apos;t forward it.

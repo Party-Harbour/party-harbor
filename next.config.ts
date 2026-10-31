@@ -5,7 +5,7 @@ const nextConfig: NextConfig = {
   // so the classic dynamic-rendering model is simpler and good enough here.
   cacheComponents: false,
   // PGlite ships a WASM Postgres and must be loaded by Node, not bundled.
-  serverExternalPackages: ["@electric-sql/pglite"],
+  serverExternalPackages: ["@electric-sql/pglite", "sharp"],
   turbopack: {
     rules: {
       "*.css": {

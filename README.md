@@ -39,6 +39,12 @@ If the project folder is inside OneDrive (or Dropbox, iCloud…), set `PGLITE_DA
 
 - Messaging: compose to a segment (everyone, no reply yet, attending, not declined) with placeholders, send now or schedule at a time or relative to the event (reminders move if the date moves). Durable per-recipient jobs with idempotency keys, retries with backoff, dead-letter and retry, quiet hours (21:00–08:00 event time), consent enforced (adults with a number and recorded opt-in only), delivery log, STOP/START handling on the inbound webhook. Local provider logs texts to the console; Twilio adapter behind the same interface.
 
+- Photo gallery per event: hosts and invited guests upload photos (plain forms, up to 12 at a time); files are checked by decoding them, auto-rotated, resized to 2000px, stripped of EXIF/GPS, and stored outside the database with a WebP thumbnail. Hosts set guest access (hidden / view / view and add), choose whether guest photos wait for approval, hide, delete, download, pick a cover photo, and see storage against a per-event cap. Guests see who added each photo, can remove their own, and can attach a photo to their contest entry, which then shows on the ballot and in results. Every image is served through an authenticated proxy (host session or invitation token); only the cover photo is public.
+
+## Photos locally
+
+Uploads go to `UPLOAD_DIR` (default `./data/uploads`, gitignored); keep it outside synced folders like the database. `GALLERY_MAX_PHOTOS` caps each event (default 500). Phones usually send HEIC as JPEG through the browser; if a raw HEIC gets through, the upload is refused with a clear message.
+
 ## Messaging locally
 
 With `MESSAGING_PROVIDER` unset, outgoing texts are printed to the dev server console instead of sent. Due messages go out once a minute while the server runs (an in-process heartbeat), or when something calls `/api/cron/dispatch` (a host session or `CRON_SECRET`). To send for real, set the Twilio variables in `.env.local` and point Twilio's inbound SMS webhook at `/api/sms/inbound`. Carrier A2P registration applies before texting anyone outside your household.
@@ -47,7 +53,7 @@ Invitation links are stored hashed for lookups plus encrypted for resending; the
 
 ## Not built yet (per the PRD phases)
 
-WhatsApp and email adapters, host digests, photo gallery (including entry photos), event templates/cloning, the external agent API, SMS reply voting, and multi-host co-host permissions. Hosting on Vercel/Supabase is a later step; the schema is plain Postgres so the move is a driver swap.
+WhatsApp and email adapters, host digests, gallery ZIP export and retention expiry, event templates/cloning, the external agent API, SMS reply voting, and multi-host co-host permissions. Hosting on Vercel/Supabase is a later step; the schema is plain Postgres so the move is a driver swap.
 
 ## Project layout
 
@@ -58,7 +64,8 @@ src/app/login/       host sign-in
 src/actions/         server actions (all host actions call requireHost)
 src/db/schema.ts     Drizzle schema (Postgres)
 src/db/seed.ts       first-run synthetic data
-src/lib/             auth, tokens, dates, queries
+src/lib/             auth, tokens, dates, queries, messaging/, gallery/
+src/app/api/         upload + photo proxy, cron dispatch, inbound SMS
 drizzle/             generated SQL migrations (run automatically at startup)
 ```
 

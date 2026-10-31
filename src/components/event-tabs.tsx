@@ -12,6 +12,7 @@ export function EventTabs({ eventId }: { eventId: string }) {
     { href: `${base}/tasks`, label: "Tasks" },
     { href: `${base}/contributions`, label: "Contributions" },
     { href: `${base}/contest`, label: "Contest" },
+    { href: `${base}/photos`, label: "Photos" },
     { href: `${base}/messages`, label: "Messages" },
     { href: `${base}/edit`, label: "Edit" },
   ];

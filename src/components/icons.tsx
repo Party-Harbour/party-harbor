@@ -138,6 +138,12 @@ export const Icon = {
       <path d="m3 7 9 6 9-6" />
     </Svg>
   ),
+  Camera: (p: IconProps) => (
+    <Svg {...p}>
+      <path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z" />
+      <circle cx="12" cy="13" r="3.5" />
+    </Svg>
+  ),
   Cookie: (p: IconProps) => (
     <Svg {...p}>
       <path d="M12 3a9 9 0 1 0 9 9 4 4 0 0 1-4.5-4.5A4 4 0 0 1 12 3Z" />

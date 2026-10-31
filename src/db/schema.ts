@@ -1,4 +1,5 @@
 import {
+  type AnyPgColumn,
   boolean,
   integer,
   jsonb,
@@ -35,6 +36,10 @@ export const consentState = pgEnum("consent_state", [
 ]);
 export const userRole = pgEnum("user_role", ["owner", "cohost"]);
 export const eventTheme = pgEnum("event_theme", ["coastal", "sunset", "celebration", "earth"]);
+// hidden: no gallery on the guest page; view: guests see approved photos;
+// contribute: guests can also upload (PRD section 11 "gallery_policy").
+export const galleryPolicy = pgEnum("gallery_policy", ["hidden", "view", "contribute"]);
+export const photoState = pgEnum("photo_state", ["pending", "visible", "hidden"]);
 
 const ts = (name: string) => timestamp(name, { withTimezone: true, mode: "date" });
 
@@ -86,6 +91,11 @@ export const events = pgTable("events", {
   status: eventStatus("status").notNull().default("draft"),
   theme: eventTheme("theme").notNull().default("coastal"),
   coverImageUrl: text("cover_image_url"),
+  // A gallery photo used as the cover; wins over coverImageUrl when set.
+  coverPhotoId: uuid("cover_photo_id").references((): AnyPgColumn => photos.id, { onDelete: "set null" }),
+  galleryPolicy: galleryPolicy("gallery_policy").notNull().default("contribute"),
+  // When false, guest uploads wait as "pending" until a host approves them.
+  galleryAutoApprove: boolean("gallery_auto_approve").notNull().default(true),
   venueName: text("venue_name"),
   venueAddress: text("venue_address"),
   rsvpDeadline: ts("rsvp_deadline"),
@@ -333,6 +343,32 @@ export const messageDeliveries = pgTable("message_deliveries", {
   createdAt: ts("created_at").notNull().defaultNow(),
 });
 
+/**
+ * Gallery assets (PRD section 11). Files live on disk under the upload
+ * directory; storageKey is the path relative to it. Processed copies only:
+ * originals are resized, auto-rotated and stripped of metadata on ingest.
+ */
+export const photos = pgTable("photos", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  eventId: uuid("event_id")
+    .notNull()
+    .references(() => events.id, { onDelete: "cascade" }),
+  // Uploading household (guest uploads) or host user (host uploads).
+  inviteId: uuid("invite_id").references(() => eventInvites.id, { onDelete: "set null" }),
+  uploadedBy: uuid("uploaded_by").references(() => users.id, { onDelete: "set null" }),
+  // Optional: this photo shows the given contest entry on the ballot.
+  contestEntryId: uuid("contest_entry_id").references(() => contestEntries.id, { onDelete: "set null" }),
+  storageKey: text("storage_key").notNull(),
+  thumbKey: text("thumb_key").notNull(),
+  mime: text("mime").notNull(),
+  bytes: integer("bytes").notNull(),
+  width: integer("width").notNull(),
+  height: integer("height").notNull(),
+  caption: text("caption"),
+  state: photoState("state").notNull().default("visible"),
+  createdAt: ts("created_at").notNull().defaultNow(),
+});
+
 export const auditLog = pgTable("audit_log", {
   id: uuid("id").primaryKey().defaultRandom(),
   actor: text("actor").notNull(),
@@ -355,11 +391,14 @@ export type Contest = typeof contests.$inferSelect;
 export type ContestCategory = typeof contestCategories.$inferSelect;
 export type ContestEntry = typeof contestEntries.$inferSelect;
 export type Vote = typeof votes.$inferSelect;
+export type Photo = typeof photos.$inferSelect;
 
 export type Message = typeof messages.$inferSelect;
 export type MessageJob = typeof messageJobs.$inferSelect;
 
 export const EVENT_THEMES = eventTheme.enumValues;
+export const GALLERY_POLICIES = galleryPolicy.enumValues;
+export const PHOTO_STATES = photoState.enumValues;
 export const MESSAGE_SEGMENTS = messageSegment.enumValues;
 export const CONTEST_STATUSES = contestStatus.enumValues;
 export const SELF_VOTE_POLICIES = selfVotePolicy.enumValues;

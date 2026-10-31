@@ -1,6 +1,8 @@
 import { guestAddEntry, guestRemoveEntry, guestVote } from "@/actions/guest";
 import { ActionForm } from "./action-form";
 import { Icon } from "./icons";
+import { PhotoThumb } from "./photo-tile";
+import { PhotoUpload } from "./photo-upload";
 import { Button, Field, Pill, TextArea } from "./ui";
 import { computeResults, type ContestView, type EntryRow, type GuestContestState } from "@/lib/contest";
 
@@ -17,15 +19,23 @@ export function GuestContest({
   view,
   state,
   inviteId,
+  canUpload,
 }: {
   token: string;
   view: ContestView;
   state: GuestContestState;
   inviteId: string;
+  canUpload: boolean;
 }) {
   const { contest, categories } = view;
   const noun = contest.entryNoun;
   const approved = view.entries.filter((e) => e.approved);
+  const photoOf = (entryId: string) => view.entries.find((e) => e.id === entryId)?.photoId ?? null;
+  const thumb = (entryId: string, size = "h-10 w-10 rounded-md") => {
+    const id = photoOf(entryId);
+    return id ? <PhotoThumb id={id} token={token} className={size} /> : null;
+  };
+  const entriesEditable = contest.status === "collecting" || contest.status === "frozen";
   const by = (e: EntryRow) =>
     contest.showBakers && e.bakerName ? (
       <span className="text-navy/60"> · {e.inviteId === inviteId ? "yours" : e.bakerName}</span>
@@ -49,20 +59,34 @@ export function GuestContest({
           <h3 className="text-sm font-medium text-navy/70">Your entries</h3>
           <ul className="mt-1 space-y-1 text-sm">
             {state.myEntries.map((e) => (
-              <li key={e.id} className="t-soft flex items-center justify-between gap-2 rounded-lg px-3 py-2">
-                <span>
-                  {e.displayName}
-                  {e.dietaryTags ? <span className="text-navy/60"> · {e.dietaryTags}</span> : null}
-                  {!e.approved ? <span className="text-navy/60"> · awaiting host approval</span> : null}
-                </span>
-                {contest.status === "collecting" ? (
-                  <form action={guestRemoveEntry}>
-                    <input type="hidden" name="token" value={token} />
-                    <input type="hidden" name="entryId" value={e.id} />
-                    <button type="submit" className="min-h-8 px-2 text-xs text-coral-deep hover:underline">
-                      Remove
-                    </button>
-                  </form>
+              <li key={e.id} className="t-soft rounded-lg px-3 py-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="flex items-center gap-2">
+                    {thumb(e.id, "h-12 w-12 rounded-lg")}
+                    <span>
+                      {e.displayName}
+                      {e.dietaryTags ? <span className="text-navy/60"> · {e.dietaryTags}</span> : null}
+                      {!e.approved ? <span className="text-navy/60"> · awaiting host approval</span> : null}
+                    </span>
+                  </span>
+                  {contest.status === "collecting" ? (
+                    <form action={guestRemoveEntry}>
+                      <input type="hidden" name="token" value={token} />
+                      <input type="hidden" name="entryId" value={e.id} />
+                      <button type="submit" className="min-h-8 px-2 text-xs text-coral-deep hover:underline">
+                        Remove
+                      </button>
+                    </form>
+                  ) : null}
+                </div>
+                {entriesEditable && canUpload ? (
+                  <PhotoUpload
+                    single
+                    fields={{ token, entryId: e.id }}
+                    returnTo={`/e/${token}#contest`}
+                    label={photoOf(e.id) ? "Replace photo" : "Add photo"}
+                    buttonClass="t-btn"
+                  />
                 ) : null}
               </li>
             ))}
@@ -91,9 +115,12 @@ export function GuestContest({
           </h3>
           <ul className="mt-1 grid gap-1 text-sm sm:grid-cols-2">
             {approved.map((e) => (
-              <li key={e.id} className="rounded-lg border border-navy/10 px-3 py-2">
-                {e.displayName}
-                {by(e)}
+              <li key={e.id} className="flex items-center gap-2 rounded-lg border border-navy/10 px-3 py-2">
+                {thumb(e.id)}
+                <span>
+                  {e.displayName}
+                  {by(e)}
+                </span>
               </li>
             ))}
           </ul>
@@ -131,6 +158,7 @@ export function GuestContest({
                           defaultChecked={state.myVotes[cat.id] === e.id}
                           className="h-4 w-4 accent-(--t-accent)"
                         />
+                        {thumb(e.id)}
                         <span>
                           {e.displayName}
                           {by(e)}
@@ -174,6 +202,7 @@ export function GuestContest({
                             <span className="t-chip flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-[10px] font-semibold text-navy">
                               {i + 1}
                             </span>
+                            {thumb(row.entry.id, "h-6 w-6 rounded")}
                             <span className="flex-1 truncate">
                               {row.entry.displayName}
                               {by(row.entry)}

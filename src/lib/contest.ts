@@ -2,10 +2,11 @@ import "server-only";
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { Contest, ContestCategory, ContestEntry, Rsvp } from "@/db/schema";
+import { photosByEntry } from "@/lib/gallery";
 
 const { contests, contestCategories, contestEntries, votes, eventInvites, households, rsvps } = schema;
 
-export type EntryRow = ContestEntry & { bakerName: string | null };
+export type EntryRow = ContestEntry & { bakerName: string | null; photoId: string | null };
 
 export type ContestView = {
   contest: Contest;
@@ -43,6 +44,7 @@ export async function getContestView(eventId: string): Promise<ContestView | nul
     countEligibleVoters(eventId, contest.voterEligibility),
   ]);
 
+  const photoOf = await photosByEntry(entryRows.map((r) => r.entry.id));
   const tallies: Record<string, Record<string, number>> = {};
   const voterSets: Record<string, Set<string>> = {};
   for (const v of voteRows) {
@@ -57,7 +59,7 @@ export async function getContestView(eventId: string): Promise<ContestView | nul
   return {
     contest,
     categories,
-    entries: entryRows.map((r) => ({ ...r.entry, bakerName: r.bakerName })),
+    entries: entryRows.map((r) => ({ ...r.entry, bakerName: r.bakerName, photoId: photoOf[r.entry.id] ?? null })),
     tallies,
     votersByCategory,
     eligibleVoters: eligible,

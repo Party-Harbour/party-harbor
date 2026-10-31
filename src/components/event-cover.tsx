@@ -1,4 +1,5 @@
 import type { Event } from "@/db/schema";
+import { photoUrl } from "@/lib/gallery/urls";
 import { getTheme, themeVars } from "@/lib/themes";
 
 function monthDay(date: Date, timeZone: string) {
@@ -17,19 +18,21 @@ export function EventCover({
   badge = true,
   rounded = "rounded-t-2xl",
 }: {
-  event: Pick<Event, "title" | "startsAt" | "timezone" | "theme" | "coverImageUrl">;
+  event: Pick<Event, "title" | "startsAt" | "timezone" | "theme" | "coverImageUrl" | "coverPhotoId">;
   className?: string;
   badge?: boolean;
   rounded?: string;
 }) {
   const theme = getTheme(event.theme);
   const { month, day } = monthDay(event.startsAt, event.timezone);
+  // A gallery photo wins over a pasted link. Cover photos are served without a token.
+  const src = event.coverPhotoId ? photoUrl(event.coverPhotoId, "full") : event.coverImageUrl;
   return (
     <div className={`relative w-full overflow-hidden ${rounded} ${className}`} style={themeVars(theme)}>
-      {event.coverImageUrl ? (
-        // Host-supplied URL; plain img keeps external hosts out of next.config.
+      {src ? (
+        // Host-supplied URL or our own proxy; plain img keeps external hosts out of next.config.
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={event.coverImageUrl} alt="" className="h-full w-full object-cover" />
+        <img src={src} alt="" className="h-full w-full object-cover" />
       ) : (
         <div
           className="flex h-full w-full items-center justify-center text-5xl"

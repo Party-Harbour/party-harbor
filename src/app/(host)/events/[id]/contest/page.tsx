@@ -10,6 +10,7 @@ import {
   updateContestSettings,
 } from "@/actions/contest";
 import { ActionForm } from "@/components/action-form";
+import { PhotoThumb } from "@/components/photo-tile";
 import { Button, Card, EmptyState, Field, Pill, SectionTitle, Select, TextArea } from "@/components/ui";
 import type { Contest } from "@/db/schema";
 import { CONTEST_STATUS_LABEL, computeResults, getContestView, type ContestView } from "@/lib/contest";
@@ -69,6 +70,7 @@ export default async function ContestPage({ params }: PageProps<"/events/[id]/co
                 <Card key={e.id} as="li" className="flex flex-wrap items-center justify-between gap-3 p-4">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
+                      {e.photoId ? <PhotoThumb id={e.photoId} className="h-12 w-12 rounded-lg" /> : null}
                       <span className={"font-medium " + (e.approved ? "text-navy" : "text-navy/50 line-through")}>
                         {e.displayName}
                       </span>

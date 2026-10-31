@@ -72,7 +72,7 @@ export function EventForm({
           type="url"
           placeholder="https://…"
           defaultValue={event?.coverImageUrl ?? ""}
-          hint="Leave blank for themed artwork. Photo uploads come with the gallery."
+          hint="Leave blank for themed artwork, or pick an uploaded photo on the Photos tab."
         />
       </div>
       <Field label="What to bring" name="whatToBring">

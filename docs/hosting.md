@@ -10,13 +10,14 @@ Locally the app is self-contained: an embedded Postgres, photos on disk, a timer
 
 Nothing changes for local development. Leave the hosted variables out of `.env.local` and `npm run dev` keeps using the embedded database, so real party data and test data never mix.
 
-## 1. Supabase: collect three values
+## 1. Supabase: collect two values
 
 Create a project (Free plan is enough), then:
 
-1. **Database URL.** Click **Connect** at the top of the dashboard and copy the **Transaction pooler** string (port `6543`). Replace `[YOUR-PASSWORD]` with the database password. If the password has characters like `@ : / ? #`, percent-encode them (`@` becomes `%40`), or reset the password to letters and digits under Database → Settings.
-2. **Project URL.** Settings → API (or the Connect dialog): `https://<project-ref>.supabase.co`.
-3. **Secret key.** Settings → API Keys → the **secret** key (`sb_secret_…`). The older `service_role` key also works. This key bypasses row-level security: it belongs only in server-side environment variables, never in the browser, the repo or a chat.
+1. **Database URL.** Click **Connect** at the top of the dashboard ([direct link](https://supabase.com/dashboard/project/_?showConnect=true)) and copy the **Transaction pooler** string (port `6543`). Replace `[YOUR-PASSWORD]`, brackets included, with the database password. If the password has characters like `@ : / ? #`, percent-encode them (`@` becomes `%40`), or reset the password to letters and digits under [Database → Settings](https://supabase.com/dashboard/project/_/database/settings).
+2. **Secret key.** [Project Settings → API Keys](https://supabase.com/dashboard/project/_/settings/api-keys) → under "Secret keys", copy the key (`sb_secret_…`). The older `service_role` key also works. This key bypasses row-level security: it belongs only in server-side environment variables, never in the browser, the repo or a chat.
+
+The project URL (`https://<project-ref>.supabase.co`) is read from the database URL, so there is nothing else to copy. Set `SUPABASE_URL` yourself only if your database is somewhere other than Supabase.
 
 The app creates its private storage bucket (`party-photos`) the first time someone uploads a photo.
 
@@ -39,7 +40,6 @@ Import the GitHub repository as a new project. Next.js is detected automatically
 | Variable              | Value                                                                    |
 | --------------------- | ------------------------------------------------------------------------ |
 | `DATABASE_URL`        | The transaction pooler string from step 1                                |
-| `SUPABASE_URL`        | The project URL from step 1                                              |
 | `SUPABASE_SECRET_KEY` | The secret key from step 1                                               |
 | `INVITE_TOKEN_KEY`    | First generated secret                                                   |
 | `CRON_SECRET`         | Second generated secret                                                  |

@@ -41,8 +41,34 @@ export function resolveKey(key: string): string {
 
 type SupabaseStorage = { url: string; key: string; bucket: string };
 
+/**
+ * A Supabase database URL already names the project, so the project URL can be
+ * read off it: pooler URLs sign in as "postgres.<ref>", direct ones use the
+ * host "db.<ref>.supabase.co". One less value to look up and paste.
+ */
+export function supabaseUrlFromDatabaseUrl(databaseUrl: string | undefined = process.env.DATABASE_URL): string | null {
+  const raw = databaseUrl?.trim();
+  if (!raw) return null;
+  try {
+    const parsed = new URL(raw);
+    const host = parsed.hostname.toLowerCase();
+    let ref = "";
+    if (host.endsWith(".pooler.supabase.com")) {
+      const user = decodeURIComponent(parsed.username);
+      if (user.startsWith("postgres.")) ref = user.slice("postgres.".length);
+    } else if (host.startsWith("db.") && host.endsWith(".supabase.co")) {
+      ref = host.slice("db.".length, host.length - ".supabase.co".length);
+    }
+    const valid = ref.length >= 8 && ref.length <= 40 && [...ref].every((ch) => "abcdefghijklmnopqrstuvwxyz0123456789".includes(ch));
+    return valid ? `https://${ref}.supabase.co` : null;
+  } catch {
+    return null;
+  }
+}
+
 function supabaseStorage(): SupabaseStorage | null {
-  const url = (process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL)?.trim();
+  const url =
+    (process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL)?.trim() || supabaseUrlFromDatabaseUrl();
   // The server-side key: a "secret" key (sb_secret_…) or the legacy service_role key.
   const key = (process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY)?.trim();
   if (!url || !key) return null;

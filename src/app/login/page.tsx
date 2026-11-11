@@ -1,19 +1,32 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ActionForm } from "@/components/action-form";
 import { HarborScene, Wordmark } from "@/components/logo";
 import { Button, Field } from "@/components/ui";
 import { signIn } from "@/actions/auth";
 import { isHostedDatabase } from "@/db";
+import { seedHosts } from "@/db/seed";
 import { getCurrentHost } from "@/lib/auth";
+import { signupOpen } from "@/lib/signup";
 
 export const metadata: Metadata = { title: "Host sign in" };
+
+/** "a@x or b@x": the accounts a fresh local database starts with. */
+function devHostEmails(): string {
+  try {
+    return seedHosts().map((h) => h.email).join(" or ");
+  } catch {
+    return "the accounts in SEED_HOSTS";
+  }
+}
 
 export default async function LoginPage() {
   const host = await getCurrentHost();
   if (host) redirect("/dashboard");
   // The seeded local credentials are public knowledge; never advertise them on a hosted site.
   const showDevHint = !isHostedDatabase() && !process.env.VERCEL;
+  const devEmails = showDevHint ? devHostEmails() : "";
 
   return (
     <main className="flex flex-1 items-center justify-center px-4 py-10">
@@ -35,10 +48,17 @@ export default async function LoginPage() {
               Sign in
             </Button>
           </ActionForm>
+          {signupOpen() ? (
+            <p className="mt-5 text-sm text-navy/70">
+              New host?{" "}
+              <Link href="/signup" className="font-medium text-navy underline">
+                Create your account
+              </Link>
+            </p>
+          ) : null}
           {showDevHint ? (
             <p className="mt-5 text-xs text-navy/60">
-              Local dev accounts: rita@partyharbor.local or randy@partyharbor.local, password “harbor-dev” unless you set
-              SEED_HOST_PASSWORD.
+              Local dev accounts: {devEmails}, password “harbor-dev” unless you set SEED_HOST_PASSWORD.
             </p>
           ) : null}
         </div>

@@ -1,88 +1,125 @@
 # Party Harbor
 
-Every gathering has a home. A self-hostable, mobile-first app for coordinating private household gatherings: contacts, invitations, household RSVPs, contributions, tasks and countdowns. Guests get a private link and never need an account.
+**Every gathering has a home.**
 
-This is the local-first MVP built from the Party Harbor PRD v1.0.
+Party Harbor is a small, self-hostable web app for coordinating private get-togethers: the cookie exchange, the bonfire, the birthday in the back yard. Hosts plan in one place. Each invited household gets a single private link and never needs an account or an app.
 
-## Run it locally
+It is built for a household, not a business. No ads, no tracking, no guest sign-ups, and your guest list stays in your own database.
 
-Requirements: Node 20 or newer. No database install needed: the app runs an embedded Postgres (PGlite) that stores its files under `data/pgdata`.
+## What it does
+
+| Area              | What you get                                                                                                         |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------- |
+| **Invitations**   | One unguessable link per household. Replace or revoke any link.                                                      |
+| **RSVPs**         | A household replies once for everyone: attending, maybe or no, with adults, children and a note.                     |
+| **Who brings what** | Sign-up slots with limits ("Hot cocoa, 1 needed") plus free-form offers.                                           |
+| **Tasks**         | A to-do list per event with due dates, priorities and assignees. Overdue work is flagged everywhere.                 |
+| **Contests**      | Entries, categories, a frozen ballot, one vote per household per category, a live tally, then a reveal.              |
+| **Photos**        | A private gallery per event. Guests can add photos; hosts can require approval. Location data is stripped.           |
+| **Messages**      | Text a segment of the guest list now, at a set time, or relative to the event. Consent and quiet hours are enforced. |
+| **Templates**     | Save any event as a template or clone it for next year. Three starter templates are included.                        |
+| **Digest**        | A daily or weekly summary for each host of what changed and what needs attention.                                    |
+
+For a tour of every screen, read the **[walkthrough](docs/walkthrough.md)**.
+
+## Try it on your computer
+
+You need [Node.js](https://nodejs.org) 20 or newer. Nothing else: the app runs its own embedded Postgres database.
 
 ```bash
+git clone https://github.com/Party-Harbour/party-harbor.git
+cd party-harbor
 npm install
 npm run dev
 ```
 
-Open http://localhost:3000 and sign in with one of the seeded host accounts:
+Open http://localhost:3000 and sign in with one of the sample host accounts:
 
-| Host  | Email                     | Password     |
-| ----- | ------------------------- | ------------ |
-| Rita  | rita@partyharbor.local    | `harbor-dev` |
-| Randy | randy@partyharbor.local   | `harbor-dev` |
+| Host     | Email                     | Password     |
+| -------- | ------------------------- | ------------ |
+| Host One | `host1@partyharbor.local` | `harbor-dev` |
+| Host Two | `host2@partyharbor.local` | `harbor-dev` |
 
-Set `SEED_HOST_PASSWORD` in `.env.local` before the first start to pick a different password. The first start also seeds three sample events and four synthetic households so there is something to click on.
+The first start also creates three sample events and four made-up households so there is something to click on. Texts are printed to the terminal instead of being sent.
 
-To start over with an empty database, stop the dev server and delete the data folder.
+To use your own names, copy `.env.example` to `.env.local` before the first start and set:
 
-If the project folder is inside OneDrive (or Dropbox, iCloud…), set `PGLITE_DATA_DIR` in `.env.local` to a folder outside the synced tree, such as `C:\Users\you\AppData\Local\PartyHarbor\pgdata`. Sync clients lock files and Postgres then fails to start with "could not create lock file".
-
-## What works today
-
-- Host sign-in with sessions (two owner accounts)
-- Dashboard: upcoming events with countdowns, RSVP counts, open and overdue tasks
-- Events: create, edit, lifecycle status (draft → invitations open → RSVP closed → underway → memories → archived)
-- Contacts: households and people, child flag, messaging-consent record
-- Guest invitation links: one per household, unguessable, stored hashed, revocable and regenerable
-- Guest page: event details, household RSVP (adults/children/note), sign-up slots with capacity, free-form "I'll bring…"
-- Hosts can record replies received by phone, manage tasks per event, and manage contribution slots
-- Contest voting (one contest per event): guests enter their bakes from their link, hosts approve entries and freeze the ballot, open voting, see a live tally, close and reveal. One vote per household per category (database-enforced), self-vote policy, eligibility by RSVP, ties shared, every status change audited.
-
-- Messaging: compose to a segment (everyone, no reply yet, attending, not declined) with placeholders, send now or schedule at a time or relative to the event (reminders move if the date moves). Durable per-recipient jobs with idempotency keys, retries with backoff, dead-letter and retry, quiet hours (21:00–08:00 event time), consent enforced (adults with a number and recorded opt-in only), delivery log, STOP/START handling on the inbound webhook. Local provider logs texts to the console; Twilio adapter behind the same interface.
-
-- Photo gallery per event: hosts and invited guests upload photos (plain forms, up to 12 at a time); files are checked by decoding them, auto-rotated, resized to 2000px, stripped of EXIF/GPS, and stored outside the database with a WebP thumbnail. Hosts set guest access (hidden / view / view and add), choose whether guest photos wait for approval, hide, delete, download, pick a cover photo, and see storage against a per-event cap. Guests see who added each photo, can remove their own, and can attach a photo to their contest entry, which then shows on the ballot and in results. Every image is served through an authenticated proxy (host session or invitation token); only the cover photo is public.
-
-- Event templates and cloning: any event can be saved as a template or cloned for next time. A template carries settings, contribution slots, tasks, the contest set-up and reminders scheduled relative to the date, never guests, RSVPs, claims, entries, votes or photos. Three starter templates from the PRD (Christmas Cookie Exchange, Carnival, Fall Bonfire) are built in. Creating from a template lays everything out against the date you pick; cloning suggests the same time a year on. Households invited after a reminder is scheduled are added to it automatically.
-
-- Host digest: each host gets a summary of every live event (RSVPs and headcount, open and overdue tasks, unfilled sign-up slots, contest state, new photos, texts going out today) plus what changed since the last digest and a list of things that need a look (overdue tasks, passed RSVP deadlines, undeliverable texts, photos or entries awaiting approval, drafts close to the date). Daily or weekly at an hour you choose in your own time zone, texted through the messaging provider when you add a mobile number, always readable on the Digest page with history. One per period however often the heartbeat runs; "Send me a digest" works any time.
-
-## Photos locally
-
-Uploads go to `UPLOAD_DIR` (default `./data/uploads`, gitignored); keep it outside synced folders like the database. `GALLERY_MAX_PHOTOS` caps each event (default 500). Phones usually send HEIC as JPEG through the browser; if a raw HEIC gets through, the upload is refused with a clear message.
-
-## Messaging locally
-
-With `MESSAGING_PROVIDER` unset, outgoing texts are printed to the dev server console instead of sent. Due messages and host digests go out once a minute while the server runs (an in-process heartbeat), or when something calls `/api/cron/dispatch` (a host session or `CRON_SECRET`). Digest links use `NEXT_PUBLIC_APP_URL` when set, otherwise `http://localhost:3000`. To send for real, set the Twilio variables in `.env.local` and point Twilio's inbound SMS webhook at `/api/sms/inbound`. Carrier A2P registration applies before texting anyone outside your household.
-
-Invitation links are stored hashed for lookups plus encrypted for resending; the key is generated next to the database folder (or set `INVITE_TOKEN_KEY`).
-
-## Not built yet (per the PRD phases)
-
-WhatsApp and email adapters (digests and guest messages are SMS or in-app for now), gallery ZIP export and retention expiry, the external agent API, SMS reply voting, multi-host co-host permissions, and password reset or sign-in rate limiting.
-
-## Hosting
-
-The same code runs on Supabase and Vercel: set `DATABASE_URL` and the app uses that Postgres instead of the embedded one, set the Supabase URL and secret key and photos go to a private storage bucket, and a scheduler calls `/api/cron/dispatch` in place of the local timer. Migrations and the first host accounts are applied at deploy time by `npm run db:migrate`. Step-by-step instructions are in [docs/hosting.md](docs/hosting.md).
-
-## Project layout
-
-```
-src/app/(host)/      host portal pages (require a session)
-src/app/e/[token]/   guest microsite
-src/app/login/       host sign-in
-src/actions/         server actions (all host actions call requireHost)
-src/db/schema.ts     Drizzle schema (Postgres)
-src/db/index.ts      picks the embedded database or DATABASE_URL (postgres.ts)
-scripts/migrate.ts   deploy-time migrations + host accounts for a hosted database
-src/db/seed.ts       first-run synthetic data
-src/lib/             auth, tokens, dates, queries, messaging/, gallery/, templates/, digest/ (build, render, schedule)
-src/app/api/         upload + photo proxy, cron dispatch, inbound SMS
-drizzle/             generated SQL migrations (run automatically at startup)
+```bash
+SEED_HOSTS="Alex <alex@example.com>, Sam <sam@example.com>"
+SEED_HOST_PASSWORD="something-only-you-know"
 ```
 
-After changing `src/db/schema.ts`, run `npx drizzle-kit generate` to produce a new migration.
+To start over, stop the server and delete the `data` folder.
+
+> **Project folder inside OneDrive, Dropbox or iCloud?** Set `PGLITE_DATA_DIR` and `UPLOAD_DIR` in `.env.local` to folders outside the synced tree. Sync clients lock files, and the database then fails to start with "could not create lock file".
+
+## Put it online
+
+The same code runs on [Supabase](https://supabase.com) (database and photo storage) and [Vercel](https://vercel.com) (the app), both on their free plans. In short:
+
+1. Create a Supabase project and copy its connection string, project URL and secret key.
+2. Import this repository into Vercel and add the environment variables.
+3. Deploy. Database tables are created during the build.
+4. Open `/signup`, enter your sign-up code, and create your host account.
+
+The step-by-step version, including the once-a-minute scheduler for reminders, is in **[docs/hosting.md](docs/hosting.md)**.
+
+## Host accounts
+
+- **Hosted:** set `HOST_SIGNUP_CODE` and each host creates their own account at `/signup`. Without the code the sign-up page is closed. Every host can see every guest list, so the code is what keeps strangers out. Remove it once everyone has signed up.
+- **Local:** an empty database is seeded with the accounts in `SEED_HOSTS` (two sample hosts by default).
+- Sign-in pauses for fifteen minutes after eight wrong passwords. There is no password reset yet.
+
+## How it is built
+
+- [Next.js](https://nextjs.org) 16 (App Router, server actions), React 19, TypeScript, Tailwind CSS v4
+- [Drizzle ORM](https://orm.drizzle.team) on Postgres: embedded [PGlite](https://pglite.dev) locally, any Postgres when `DATABASE_URL` is set
+- [sharp](https://sharp.pixelplumbing.com) for photo processing; local disk or a private Supabase Storage bucket
+- A durable message queue in the database (per-recipient jobs, retries, idempotency), with a console provider and a Twilio adapter
+- No client-side framework state, no external services required to run it
+
+```
+src/app/(host)/      host pages (need a session)
+src/app/e/[token]/   the guest page behind each invitation link
+src/app/login/       sign in          src/app/signup/   gated sign-up
+src/app/api/         photo upload and proxy, cron dispatch, inbound SMS
+src/actions/         server actions (every host action checks the session)
+src/db/              schema, embedded/hosted database selection, first-run seed
+src/lib/             auth, dates, messaging/, gallery/, templates/, digest/
+scripts/migrate.ts   deploy-time migrations for a hosted database
+drizzle/             generated SQL migrations
+docs/                walkthrough and hosting guide
+```
+
+Useful commands:
+
+```bash
+npm run dev            # start the app
+npm run lint           # eslint
+npx tsc --noEmit       # type check (run `npx next typegen` first)
+npx drizzle-kit generate --name what-changed   # after editing src/db/schema.ts
+npm run db:migrate     # apply migrations to the database in DATABASE_URL
+```
+
+All settings are listed with comments in [.env.example](.env.example).
+
+## Privacy by design
+
+- Guests see only their own household's replies and entries.
+- Invitation tokens are stored hashed for lookups and encrypted for re-sending.
+- Texts go only to adults with a recorded opt-in, never between 9 pm and 8 am, and STOP is honoured automatically.
+- Photos lose their EXIF and GPS data, and are served only to a signed-in host or a guest holding a valid link.
+- Significant actions are written to an audit log.
+- The sample data in this repository is entirely made up.
+
+## Not built yet
+
+Email and WhatsApp messages, gallery download as a ZIP, voting by text reply, co-host permission levels, password reset, and an API for outside tools.
+
+## Contributing
+
+Issues and pull requests are welcome. Please keep real names, phone numbers and other personal data out of code, fixtures, screenshots and issue reports. Run `npm run lint` and `npx tsc --noEmit` before opening a pull request.
 
 ## Design
 
-Coastal Sunset tokens from the PRD live in `src/app/globals.css`. Navy carries primary text and controls; coral is reserved for highlights and date badges. Headings use Fraunces, the "You're invited!" line uses Caveat, body text is Geist (all open-licensed Google Fonts).
-
-Each event picks one of the four PRD themes (Coastal Classic, Sunset Warmth, Celebration Bright, Modern Earth), defined in `src/lib/themes.ts`. The theme drives the guest page's colours and the cover art fallback; hosts can also paste a cover photo link. The original PRD mock-ups are in `docs/mockups/` for reference.
+Colours and type follow a "Coastal Sunset" palette defined in `src/app/globals.css`: navy for text and controls, coral for highlights and date badges. Headings use Fraunces, the "You're invited!" line uses Caveat, and body text is Geist, all open-licensed. Each event picks one of four themes (Coastal Classic, Sunset Warmth, Celebration Bright, Modern Earth) from `src/lib/themes.ts`, which sets the colours of its guest page and its cover art.

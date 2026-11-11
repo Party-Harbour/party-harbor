@@ -43,3 +43,6 @@ next-env.d.ts
 
 # local embedded database (contains real party data, never commit)
 /data/
+
+# PRD mock-ups: kept locally for reference, not published (they show real names)
+/docs/mockups/

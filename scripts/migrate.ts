@@ -1,6 +1,7 @@
 /**
- * Applies the SQL migrations in ./drizzle to the database in DATABASE_URL and
- * creates the two host accounts if the database is empty.
+ * Applies the SQL migrations in ./drizzle to the database in DATABASE_URL.
+ * If SEED_HOST_PASSWORD is set and the database has no accounts, it also
+ * creates the hosts listed in SEED_HOSTS; otherwise hosts sign up at /signup.
  *
  *   npm run db:migrate
  *
@@ -32,12 +33,20 @@ async function main() {
   try {
     await migrate(db, { migrationsFolder: path.join(process.cwd(), "drizzle") });
     console.log("[db:migrate] Migrations are up to date.");
-    const seeded = await seedIfEmpty(db, { samples: false });
-    console.log(
-      seeded === "skipped"
-        ? "[db:migrate] Host accounts already exist; nothing seeded."
-        : `[db:migrate] Seeded ${seeded === "hosts" ? "the two host accounts" : "host accounts and sample data"}.`,
-    );
+    if (process.env.SEED_HOST_PASSWORD) {
+      const seeded = await seedIfEmpty(db, { samples: false });
+      console.log(
+        seeded === "skipped"
+          ? "[db:migrate] Host accounts already exist; nothing seeded."
+          : "[db:migrate] Seeded the host accounts from SEED_HOSTS.",
+      );
+    } else if (process.env.HOST_SIGNUP_CODE) {
+      console.log("[db:migrate] No accounts seeded: hosts create their own at /signup with the sign-up code.");
+    } else {
+      console.warn(
+        "[db:migrate] Nobody can sign in yet. Set HOST_SIGNUP_CODE so hosts can sign up, or SEED_HOST_PASSWORD to create accounts at deploy time.",
+      );
+    }
   } finally {
     await client.end({ timeout: 5 });
   }

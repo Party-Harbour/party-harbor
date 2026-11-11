@@ -7,8 +7,41 @@ type Db = PgDatabase<PgQueryResultHKT, typeof schema>;
 
 export type SeedResult = "skipped" | "hosts" | "hosts+samples";
 
+export type SeedHost = { displayName: string; email: string };
+
+const DEFAULT_SEED_HOSTS: SeedHost[] = [
+  { displayName: "Host One", email: "host1@partyharbor.local" },
+  { displayName: "Host Two", email: "host2@partyharbor.local" },
+];
+
 /**
- * First-run seed. Local development gets the two host accounts plus synthetic
+ * The host accounts created on an empty database. Set SEED_HOSTS to use your
+ * own names and sign-in emails: "Name <email>, Name <email>" (one to six).
+ * The emails are sign-in names only; nothing is ever sent to them.
+ */
+export function seedHosts(raw: string | undefined = process.env.SEED_HOSTS): SeedHost[] {
+  if (!raw?.trim()) return DEFAULT_SEED_HOSTS;
+  const hosts = raw
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => {
+      const open = part.indexOf("<");
+      const close = part.indexOf(">");
+      const email = (open >= 0 && close > open ? part.slice(open + 1, close) : part).trim().toLowerCase();
+      if (!email.includes("@") || email.includes(" ")) {
+        throw new Error(`SEED_HOSTS: "${part}" has no email address. Use: Name <email>, Name <email>`);
+      }
+      const displayName = (open > 0 ? part.slice(0, open).trim() : "") || email.split("@")[0];
+      return { displayName, email };
+    });
+  if (hosts.length === 0 || hosts.length > 6) throw new Error("SEED_HOSTS: list between one and six hosts.");
+  if (new Set(hosts.map((h) => h.email)).size !== hosts.length) throw new Error("SEED_HOSTS: each host needs a different email.");
+  return hosts;
+}
+
+/**
+ * First-run seed. Local development gets the host accounts plus synthetic
  * sample data (per the PRD's rule that no real attendee data ships in
  * fixtures). A hosted database (`samples: false`) gets the host accounts only,
  * and must be given a real password: the local default is public knowledge.
@@ -26,29 +59,27 @@ export async function seedIfEmpty(db: Db, opts: { samples: boolean } = { samples
   const password = configured ?? "harbor-dev";
   const tz = "America/New_York";
 
-  const [rita, randy] = await db
+  const created = await db
     .insert(schema.users)
-    .values([
-      {
-        email: "rita@partyharbor.local",
-        displayName: "Rita",
+    .values(
+      seedHosts().map((h) => ({
+        email: h.email,
+        displayName: h.displayName,
         passwordHash: hashPassword(password),
-        role: "owner",
-      },
-      {
-        email: "randy@partyharbor.local",
-        displayName: "Randy",
-        passwordHash: hashPassword(password),
-        role: "owner",
-      },
-    ])
+        role: "owner" as const,
+      })),
+    )
     .returning();
+  const hostEmails = created.map((u) => u.email);
+  // Sample tasks and events are split between the first two hosts (or all given to one).
+  const first = created[0];
+  const second = created[1] ?? created[0];
 
   if (!opts.samples) {
     await db.insert(schema.auditLog).values({
       actor: "system",
       action: "seed.initial",
-      metadata: { hosts: [rita.email, randy.email], samples: false },
+      metadata: { hosts: hostEmails, samples: false },
     });
     return "hosts";
   }
@@ -93,7 +124,7 @@ export async function seedIfEmpty(db: Db, opts: { samples: boolean } = { samples
         rsvpDeadline: wallToUtc("2026-12-06T23:59", tz)!,
         whatToBring:
           "One dozen cookies per entry, plus the recipe card if you want to share it.",
-        createdBy: rita.id,
+        createdBy: first.id,
       },
       {
         title: "Fall Bonfire",
@@ -106,7 +137,7 @@ export async function seedIfEmpty(db: Db, opts: { samples: boolean } = { samples
         venueName: "Back field",
         rsvpDeadline: wallToUtc("2026-11-10T23:59", tz)!,
         whatToBring: "A potluck dish, camp chairs, and a layer for after sunset.",
-        createdBy: randy.id,
+        createdBy: second.id,
       },
       {
         title: "Carnival Party",
@@ -116,19 +147,19 @@ export async function seedIfEmpty(db: Db, opts: { samples: boolean } = { samples
         status: "draft",
         theme: "sunset",
         venueName: "Our house",
-        createdBy: randy.id,
+        createdBy: second.id,
       },
     ])
     .returning();
 
   await db.insert(schema.tasks).values([
-    { eventId: cookies.id, title: "Set up voting categories", assigneeId: rita.id, dueAt: wallToUtc("2026-12-01T18:00", tz), priority: "high" },
-    { eventId: cookies.id, title: "Buy takeaway boxes", assigneeId: randy.id, dueAt: wallToUtc("2026-12-10T18:00", tz) },
-    { eventId: cookies.id, title: "Print ballot cards", assigneeId: rita.id, dueAt: wallToUtc("2026-12-12T18:00", tz), status: "in_progress" },
-    { eventId: bonfire.id, title: "Confirm food truck", assigneeId: randy.id, dueAt: wallToUtc("2026-11-05T18:00", tz), priority: "high" },
-    { eventId: bonfire.id, title: "Stack firewood", assigneeId: randy.id, dueAt: wallToUtc("2026-11-13T18:00", tz) },
-    { eventId: bonfire.id, title: "Buy s'mores supplies", assigneeId: rita.id, dueAt: wallToUtc("2026-11-12T18:00", tz), status: "done" },
-    { eventId: carnival.id, title: "Rent cotton candy machine", assigneeId: rita.id, dueAt: wallToUtc("2027-05-20T18:00", tz) },
+    { eventId: cookies.id, title: "Set up voting categories", assigneeId: first.id, dueAt: wallToUtc("2026-12-01T18:00", tz), priority: "high" },
+    { eventId: cookies.id, title: "Buy takeaway boxes", assigneeId: second.id, dueAt: wallToUtc("2026-12-10T18:00", tz) },
+    { eventId: cookies.id, title: "Print ballot cards", assigneeId: first.id, dueAt: wallToUtc("2026-12-12T18:00", tz), status: "in_progress" },
+    { eventId: bonfire.id, title: "Confirm food truck", assigneeId: second.id, dueAt: wallToUtc("2026-11-05T18:00", tz), priority: "high" },
+    { eventId: bonfire.id, title: "Stack firewood", assigneeId: second.id, dueAt: wallToUtc("2026-11-13T18:00", tz) },
+    { eventId: bonfire.id, title: "Buy s'mores supplies", assigneeId: first.id, dueAt: wallToUtc("2026-11-12T18:00", tz), status: "done" },
+    { eventId: carnival.id, title: "Rent cotton candy machine", assigneeId: first.id, dueAt: wallToUtc("2027-05-20T18:00", tz) },
   ]);
 
   await db.insert(schema.contributionSlots).values([
@@ -154,7 +185,7 @@ export async function seedIfEmpty(db: Db, opts: { samples: boolean } = { samples
   await db.insert(schema.auditLog).values({
     actor: "system",
     action: "seed.initial",
-    metadata: { hosts: [rita.email, randy.email], samples: true },
+    metadata: { hosts: hostEmails, samples: true },
   });
   return "hosts+samples";
 }

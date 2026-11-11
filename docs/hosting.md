@@ -43,13 +43,21 @@ Import the GitHub repository as a new project. Next.js is detected automatically
 | `SUPABASE_SECRET_KEY` | The secret key from step 1                                               |
 | `INVITE_TOKEN_KEY`    | First generated secret                                                   |
 | `CRON_SECRET`         | Second generated secret                                                  |
-| `SEED_HOST_PASSWORD`  | The password both host accounts start with. 12 characters or more.      |
+| `HOST_SIGNUP_CODE`    | A code of 8 characters or more that you give to each host. Opens `/signup`. |
 
 Optional: `NEXT_PUBLIC_APP_URL` (set it once you attach a custom domain, e.g. `https://party.example.com`; until then links use the domain Vercel assigns), and the Twilio variables from `.env.example` when you are ready to send real texts.
 
-Then deploy. The build runs `npm run vercel-build`, which applies the SQL migrations in `drizzle/` and, on an empty database, creates the two host accounts (`rita@partyharbor.local` and `randy@partyharbor.local`) with `SEED_HOST_PASSWORD`. No sample events or households are created on a hosted database. Preview deployments never touch the database schema.
+Then deploy. If the project was already deployed before the variables were added, open Deployments and choose **Redeploy** on the latest one: variables only take effect on a new build. The build runs `npm run vercel-build`, which applies the SQL migrations in `drizzle/`. No sample events or households are created on a hosted database. Preview deployments never touch the database schema.
 
 If the build fails at the migrate step, the log line starting `[db:migrate] failed:` says why. The usual causes are a missing variable or a database password that needs percent-encoding.
+
+### Creating the host accounts
+
+Open `https://YOUR-APP.vercel.app/signup`. Each host enters a name, an email (used only to sign in), a password of 10 characters or more, and the sign-up code. Every host sees every guest list, which is why the page is closed to anyone without the code. Ten wrong codes in fifteen minutes pause sign-up for the rest of that window.
+
+When everyone has an account, delete `HOST_SIGNUP_CODE` in Vercel and redeploy. The sign-up page then reports that sign-up is closed. Add the variable back whenever you want to let another host in.
+
+Prefer to create accounts at deploy time instead? Set `SEED_HOSTS` (`Name <email>, Name <email>`) and `SEED_HOST_PASSWORD` (12 characters or more). On an empty database the build creates those hosts with that shared starting password.
 
 ## 4. Supabase: the once-a-minute scheduler
 
@@ -74,7 +82,7 @@ Each call sends whatever messages and digests are due. The jobs table is the sou
 
 ## 5. After the first deploy
 
-- Sign in as each host and check the Digest page settings (time zone, hour, mobile number).
+- Create each host account at `/signup`, then check the Digest page settings (time zone, hour, mobile number).
 - Upload a photo to an event: this creates the storage bucket and proves the secret key works.
 - Open `https://YOUR-APP.vercel.app/api/cron/dispatch` while signed in as a host. A JSON reply with `"ok": true` means the dispatcher runs.
 
@@ -86,5 +94,5 @@ Edit `src/db/schema.ts`, run `npx drizzle-kit generate --name <what-changed>`, c
 
 - **Photo size.** Serverless hosts refuse request bodies over a few MB, so the upload form shrinks large photos in the browser and sends one per request. With JavaScript off, only small photos get through on a hosted site.
 - **Connections.** The pool is small (5 per server instance) and prepared statements are off, which is what Supabase's transaction pooler expects. `DATABASE_POOL_MAX` overrides the pool size.
-- **Sign-in.** There is no sign-up page and no password-reset flow yet; the two host accounts and their starting password come from the seed. There is also no limit on sign-in attempts yet, so pick a long passphrase.
+- **Sign-in.** An account pauses for fifteen minutes after eight wrong passwords. There is no password-reset flow yet, so keep passwords somewhere safe.
 - **This repository is public.** Never commit `.env.local`, connection strings, keys, or real guest data.

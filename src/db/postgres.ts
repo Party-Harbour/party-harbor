@@ -32,10 +32,28 @@ export function viaSupabasePooler(url: string, poolerHost: string | null = supab
   return `${parsed.protocol}//postgres.${ref}:${parsed.password}@${poolerHost}:6543${parsed.pathname}${parsed.search}`;
 }
 
+/** A database password given on its own, so nobody has to splice (and percent-encode) it into a URL by hand. */
+export function databasePasswordOverride(): string | null {
+  const value = process.env.SUPABASE_DB_PASSWORD ?? process.env.DATABASE_PASSWORD;
+  return value && value.trim() ? value.trim() : null;
+}
+
+/** Replaces the password inside a connection string, encoding it so symbols such as @ # ? / survive. */
+export function withPassword(url: string, password: string | null = databasePasswordOverride()): string {
+  if (!password) return url;
+  try {
+    const parsed = new URL(url);
+    if (!parsed.host || !parsed.username) return url;
+    return `${parsed.protocol}//${parsed.username}:${encodeURIComponent(password)}@${parsed.host}${parsed.pathname}${parsed.search}`;
+  } catch {
+    return url;
+  }
+}
+
 /** Set DATABASE_URL to run against a real Postgres (Supabase, Neon, self-hosted) instead of the embedded one. */
 export function hostedDatabaseUrl(): string | null {
   const url = process.env.DATABASE_URL?.trim();
-  return url ? viaSupabasePooler(url) : null;
+  return url ? withPassword(viaSupabasePooler(url)) : null;
 }
 
 function isLocalHost(url: string): boolean {

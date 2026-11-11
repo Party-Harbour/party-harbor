@@ -14,7 +14,7 @@
 import path from "node:path";
 import { loadEnvConfig } from "@next/env";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
-import { hostedDatabaseUrl, openPostgres } from "../src/db/postgres";
+import { databasePasswordOverride, hostedDatabaseUrl, openPostgres } from "../src/db/postgres";
 import { seedIfEmpty } from "../src/db/seed";
 
 /** A problem the person deploying can fix by changing a setting. */
@@ -76,6 +76,35 @@ function checkOtherSettings(): void {
   }
 }
 
+/**
+ * The database said no to the password. Says where the password came from,
+ * what looks off about it (shape only, never the value), and the easy fix.
+ */
+function rejectedPassword(): string {
+  const fix =
+    "Easiest fix: in Supabase open Database > Settings > Reset database password, choose Generate a password, and copy it. " +
+    "In Vercel add a variable named SUPABASE_DB_PASSWORD with that password as its value (leave DATABASE_URL as it is), then redeploy. " +
+    WHERE;
+  if (databasePasswordOverride()) {
+    return `The database rejected the password in SUPABASE_DB_PASSWORD. It must be the database password (not your Supabase sign-in password or an API key). ${fix}`;
+  }
+  const clues: string[] = [];
+  try {
+    const parsed = new URL(process.env.DATABASE_URL?.trim() ?? "");
+    const password = decodeURIComponent(parsed.password);
+    if (password.startsWith("[") && password.endsWith("]")) clues.push("it is still wrapped in [square brackets]");
+    if (password !== password.trim()) clues.push("it has a space at the start or end");
+    if (parsed.hash) clues.push("it contains a # so everything after that was cut off");
+    if (parsed.search) clues.push("it may contain a ? which cuts it short");
+    if (parsed.pathname.split("/").length > 2) clues.push("it may contain a / which cuts it short");
+    if (password.startsWith("sb_") || password.startsWith("eyJ")) clues.push("it looks like an API key, not the database password");
+  } catch {
+    /* no clues */
+  }
+  const noticed = clues.length > 0 ? ` What stands out about the password in DATABASE_URL: ${clues.join("; ")}.` : "";
+  return `The database rejected the password in DATABASE_URL.${noticed} ${fix}`;
+}
+
 /** Turns a driver error into something actionable, without echoing the connection string. */
 function explain(err: unknown): string {
   if (err instanceof SetupError) return err.message;
@@ -86,7 +115,7 @@ function explain(err: unknown): string {
   const code = chain.map((e) => e.code).find(Boolean) ?? "";
   const text = chain.map((e) => e.message ?? "").join(" | ");
   if (code === "28P01" || /password authentication failed/i.test(text)) {
-    return `The database rejected the password in DATABASE_URL. Reset it in Supabase (Database > Settings > Reset database password), put the new one in DATABASE_URL. ${WHERE}`;
+    return rejectedPassword();
   }
   if (/tenant(\/| or )user .*not found/i.test(text)) {
     return `Supabase does not recognise the project in DATABASE_URL. Copy the "Transaction pooler" string again from Supabase > Connect: the part after "postgres." and the region in the host must both match your project. ${WHERE}`;

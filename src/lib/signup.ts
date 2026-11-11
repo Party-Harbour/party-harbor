@@ -9,7 +9,8 @@ import { createHash, timingSafeEqual } from "node:crypto";
  * close sign-up again.
  */
 function signupCode(): string | null {
-  const code = process.env.HOST_SIGNUP_CODE?.trim();
+  // HOST_SIGNUP is accepted too: it is an easy slip when typing the name by hand.
+  const code = (process.env.HOST_SIGNUP_CODE ?? process.env.HOST_SIGNUP)?.trim();
   return code && code.length >= 8 ? code : null;
 }
 

@@ -55,7 +55,7 @@ To start over, stop the server and delete the `data` folder.
 
 ## Put it online
 
-The same code runs on [Supabase](https://supabase.com) (database and photo storage) and [Vercel](https://vercel.com) (the app), both on their free plans. In short:
+The same code runs on [Supabase](https://supabase.com) (database and photo storage) and [Vercel](https://vercel.com) (the app). Supabase's free plan is enough; on Vercel's free plan the reminder schedule needs one extra step, covered in the guide. In short:
 
 1. Create a Supabase project and copy its connection string, project URL and secret key.
 2. Import this repository into Vercel and add the environment variables.

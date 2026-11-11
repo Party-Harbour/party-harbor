@@ -139,7 +139,7 @@ async function main() {
           ? "[db:migrate] Host accounts already exist; nothing seeded."
           : "[db:migrate] Seeded the host accounts from SEED_HOSTS.",
       );
-    } else if (process.env.HOST_SIGNUP_CODE) {
+    } else if (process.env.HOST_SIGNUP_CODE ?? process.env.HOST_SIGNUP) {
       console.log("[db:migrate] No accounts seeded: hosts create their own at /signup with the sign-up code.");
     } else {
       console.warn(

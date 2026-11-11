@@ -59,11 +59,11 @@ When everyone has an account, delete `HOST_SIGNUP_CODE` in Vercel and redeploy. 
 
 Prefer to create accounts at deploy time instead? Set `SEED_HOSTS` (`Name <email>, Name <email>`) and `SEED_HOST_PASSWORD` (12 characters or more). On an empty database the build creates those hosts with that shared starting password.
 
-## 4. Supabase: the once-a-minute scheduler
+## 4. The scheduler
 
-Vercel's free plan runs scheduled jobs once a day, which is too coarse for reminders. `vercel.json` keeps that daily run as a safety net; Supabase does the real work.
+Reminders and digests go out when something calls `/api/cron/dispatch`. `vercel.json` asks Vercel to do that every five minutes, and Vercel signs each call with `CRON_SECRET`. **On a Vercel Pro plan there is nothing more to set up.**
 
-In the Supabase dashboard, open Integrations and enable **Cron** (`pg_cron`) and, under Database → Extensions, **pg_net**. Then run this in the SQL editor, with your deployed address and your `CRON_SECRET`:
+**On Vercel's free (Hobby) plan** scheduled jobs may run only once a day, and a deploy with a more frequent schedule is rejected. Change the schedule in `vercel.json` to `"0 13 * * *"` and let Supabase make the frequent calls instead: open Integrations and enable **Cron** (`pg_cron`) and, under Database → Extensions, **pg_net**. Then run this in the SQL editor, with your deployed address and your `CRON_SECRET`:
 
 ```sql
 select cron.schedule(

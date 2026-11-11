@@ -18,7 +18,12 @@ function getKey(): Buffer {
     cachedKey = Buffer.from(env, "hex");
     return cachedKey;
   }
-  const dataDir = path.resolve(process.env.PGLITE_DATA_DIR ?? path.join(process.cwd(), "data", "pgdata"));
+  if (process.env.VERCEL || process.env.DATABASE_URL) {
+    // A generated key file would be lost on the next deploy (or differ between
+    // instances), silently breaking every stored invitation link.
+    throw new Error("INVITE_TOKEN_KEY is not set. Hosted deployments need it: 64 hex characters, kept secret.");
+  }
+  const dataDir = path.resolve(/*turbopackIgnore: true*/ process.env.PGLITE_DATA_DIR ?? path.join(process.cwd(), "data", "pgdata"));
   const keyPath = path.join(path.dirname(dataDir), "invite-token.key");
   if (!existsSync(keyPath)) {
     mkdirSync(path.dirname(keyPath), { recursive: true });

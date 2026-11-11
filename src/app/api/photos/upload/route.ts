@@ -7,11 +7,18 @@ import { guestCanUpload, ingestFiles } from "@/lib/gallery";
 import { resolveInvite } from "@/lib/guest";
 import { getEvent } from "@/lib/queries";
 
+/** Decoding and resizing a large photo, then writing two copies to storage. */
+export const maxDuration = 60;
+
 /**
  * Multipart upload target for plain HTML forms (works without JavaScript and
  * sidesteps the server-action body limit). Authorizes as a host (session +
  * eventId) or a guest (invitation token), stores the files, then redirects
  * back to `returnTo` with ?photos=<n> or ?photoError=<message>.
+ *
+ * The upload form's script sends one shrunken photo per request with
+ * respond=json (serverless hosts cap request bodies at a few MB) and gets
+ * { stored, error } back instead of a redirect.
  */
 export async function POST(req: NextRequest) {
   const form = await req.formData();
@@ -24,6 +31,11 @@ export async function POST(req: NextRequest) {
   const files = form.getAll("files").filter((f): f is File => f instanceof File);
   const caption = str("caption") || null;
   const entryId = str("entryId") || null;
+  const wantsJson = str("respond") === "json";
+  const reply = (params: Record<string, string | null>) =>
+    wantsJson
+      ? NextResponse.json({ stored: Number(params.photos ?? 0), error: params.photoError ?? null })
+      : back(req, returnTo, params);
 
   const db = await getDb();
   let result: Awaited<ReturnType<typeof ingestFiles>>;
@@ -31,7 +43,7 @@ export async function POST(req: NextRequest) {
   if (token) {
     const resolved = await resolveInvite(token);
     if (!resolved) return NextResponse.json({ error: "invalid link" }, { status: 403 });
-    if (!guestCanUpload(resolved.event)) return back(req, returnTo, { photoError: "Photo uploads are closed for this event." });
+    if (!guestCanUpload(resolved.event)) return reply({ photoError: "Photo uploads are closed for this event." });
     if (entryId) {
       // Guests may only attach photos to their own entries.
       const [entry] = await db
@@ -45,7 +57,7 @@ export async function POST(req: NextRequest) {
             eq(schema.contestEntries.inviteId, resolved.invite.id),
           ),
         );
-      if (!entry) return back(req, returnTo, { photoError: "That entry isn't yours." });
+      if (!entry) return reply({ photoError: "That entry isn't yours." });
     }
     result = await ingestFiles({
       event: resolved.event,
@@ -60,7 +72,11 @@ export async function POST(req: NextRequest) {
     revalidatePath(`/events/${resolved.event.id}`, "layout");
   } else {
     const host = await getCurrentHost();
-    if (!host) return NextResponse.redirect(new URL("/login", req.nextUrl.origin), 303);
+    if (!host) {
+      return wantsJson
+        ? NextResponse.json({ stored: 0, error: "Your session expired. Sign in again." }, { status: 401 })
+        : NextResponse.redirect(new URL("/login", req.nextUrl.origin), 303);
+    }
     const event = await getEvent(str("eventId"));
     if (!event) return NextResponse.json({ error: "unknown event" }, { status: 404 });
     if (entryId) {
@@ -69,7 +85,7 @@ export async function POST(req: NextRequest) {
         .from(schema.contestEntries)
         .innerJoin(schema.contests, eq(schema.contestEntries.contestId, schema.contests.id))
         .where(and(eq(schema.contestEntries.id, entryId), eq(schema.contests.eventId, event.id)));
-      if (!entry) return back(req, returnTo, { photoError: "That entry doesn't belong to this event." });
+      if (!entry) return reply({ photoError: "That entry doesn't belong to this event." });
     }
     result = await ingestFiles({
       event,
@@ -86,7 +102,7 @@ export async function POST(req: NextRequest) {
   revalidatePath("/events");
   revalidatePath("/dashboard");
 
-  return back(req, returnTo, {
+  return reply({
     photos: result.stored > 0 ? String(result.stored) : null,
     photoError: result.errors.length > 0 ? result.errors.join(" ") : null,
   });

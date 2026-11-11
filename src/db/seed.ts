@@ -1,17 +1,29 @@
-import type { PgliteDatabase } from "drizzle-orm/pglite";
+import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import * as schema from "./schema";
 import { hashPassword } from "@/lib/password";
 import { wallToUtc } from "@/lib/dates";
 
-type Db = PgliteDatabase<typeof schema>;
+type Db = PgDatabase<PgQueryResultHKT, typeof schema>;
 
-// First-run seed for local development. All names are synthetic, per the
-// PRD's rule that no real attendee data ships in fixtures.
-export async function seedIfEmpty(db: Db) {
+export type SeedResult = "skipped" | "hosts" | "hosts+samples";
+
+/**
+ * First-run seed. Local development gets the two host accounts plus synthetic
+ * sample data (per the PRD's rule that no real attendee data ships in
+ * fixtures). A hosted database (`samples: false`) gets the host accounts only,
+ * and must be given a real password: the local default is public knowledge.
+ */
+export async function seedIfEmpty(db: Db, opts: { samples: boolean } = { samples: true }): Promise<SeedResult> {
   const existing = await db.select({ id: schema.users.id }).from(schema.users).limit(1);
-  if (existing.length > 0) return;
+  if (existing.length > 0) return "skipped";
 
-  const password = process.env.SEED_HOST_PASSWORD ?? "harbor-dev";
+  const configured = process.env.SEED_HOST_PASSWORD;
+  if (!opts.samples && (!configured || configured.length < 12 || configured === "harbor-dev")) {
+    throw new Error(
+      "Set SEED_HOST_PASSWORD (12+ characters, not the local default) before seeding a hosted database.",
+    );
+  }
+  const password = configured ?? "harbor-dev";
   const tz = "America/New_York";
 
   const [rita, randy] = await db
@@ -31,6 +43,15 @@ export async function seedIfEmpty(db: Db) {
       },
     ])
     .returning();
+
+  if (!opts.samples) {
+    await db.insert(schema.auditLog).values({
+      actor: "system",
+      action: "seed.initial",
+      metadata: { hosts: [rita.email, randy.email], samples: false },
+    });
+    return "hosts";
+  }
 
   const householdRows = await db
     .insert(schema.households)
@@ -133,6 +154,7 @@ export async function seedIfEmpty(db: Db) {
   await db.insert(schema.auditLog).values({
     actor: "system",
     action: "seed.initial",
-    metadata: { hosts: [rita.email, randy.email] },
+    metadata: { hosts: [rita.email, randy.email], samples: true },
   });
+  return "hosts+samples";
 }

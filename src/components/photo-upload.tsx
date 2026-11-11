@@ -1,13 +1,52 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { Icon } from "./icons";
 import { MAX_FILES_PER_UPLOAD } from "@/lib/gallery/urls";
 
+/** Photos at or under this size are sent untouched; larger ones are shrunk first. */
+const SEND_AS_IS_BYTES = 3 * 1024 * 1024;
+/** A little above the server's stored size so its own resize has pixels to work with. */
+const SHRINK_EDGE = 2400;
+
 /**
- * A plain multipart form posting to /api/photos/upload. Works without
- * JavaScript; with it, shows the selected count and a sending state.
- * `fields` carries the authorization context (token, or eventId for hosts).
+ * Phone photos run 5-12 MB and serverless hosts refuse request bodies over a
+ * few MB, so big photos are redrawn smaller as JPEG before sending. Anything
+ * the browser can't decode (or that is already small) goes up unchanged and
+ * the server has the final say.
+ */
+async function shrink(file: File): Promise<File> {
+  if (file.size <= SEND_AS_IS_BYTES) return file;
+  try {
+    const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
+    const scale = Math.min(1, SHRINK_EDGE / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return file;
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+    for (const quality of [0.86, 0.72, 0.58]) {
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
+      if (blob && blob.size <= SEND_AS_IS_BYTES) {
+        const base = file.name.includes(".") ? file.name.slice(0, file.name.lastIndexOf(".")) : file.name || "photo";
+        return new File([blob], `${base}.jpg`, { type: "image/jpeg" });
+      }
+    }
+  } catch {
+    // Not decodable here (some HEIC, odd formats): let the server try the original.
+  }
+  return file;
+}
+
+/**
+ * A multipart form posting to /api/photos/upload. Without JavaScript it is a
+ * plain form post. With it, photos are shrunk in the browser and sent one per
+ * request, with a running count. `fields` carries the authorization context
+ * (token, or eventId for hosts).
  */
 export function PhotoUpload({
   fields,
@@ -26,6 +65,52 @@ export function PhotoUpload({
 }) {
   const [count, setCount] = useState(0);
   const [sending, setSending] = useState(false);
+  const [progress, setProgress] = useState("");
+
+  async function onSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const picker = form.elements.namedItem("files");
+    const chosen = picker instanceof HTMLInputElement ? Array.from(picker.files ?? []) : [];
+    if (chosen.length === 0) return;
+    const caption = form.elements.namedItem("caption");
+    setSending(true);
+
+    const files = chosen.slice(0, MAX_FILES_PER_UPLOAD);
+    const errors: string[] = [];
+    if (chosen.length > files.length) errors.push(`Up to ${MAX_FILES_PER_UPLOAD} photos at a time; the first ${files.length} were sent.`);
+    let stored = 0;
+    for (let i = 0; i < files.length; i++) {
+      const original = files[i];
+      setProgress(files.length > 1 ? `Uploading ${i + 1} of ${files.length}…` : "Uploading…");
+      const body = new FormData();
+      for (const [k, v] of Object.entries(fields)) body.set(k, v);
+      body.set("returnTo", returnTo);
+      body.set("respond", "json");
+      if (caption instanceof HTMLInputElement && caption.value.trim()) body.set("caption", caption.value.trim());
+      const file = await shrink(original);
+      body.set("files", file, file.name);
+      try {
+        const res = await fetch("/api/photos/upload", { method: "POST", body });
+        if (res.status === 413) {
+          errors.push(`${original.name || "photo"}: too large to send. Try a smaller copy.`);
+          continue;
+        }
+        const result = (await res.json()) as { stored?: number; error?: string | null };
+        stored += result.stored ?? 0;
+        if (result.error) errors.push(result.error);
+      } catch {
+        errors.push(`${original.name || "photo"}: the upload didn't go through.`);
+      }
+    }
+
+    const next = new URL(returnTo, window.location.origin);
+    next.searchParams.delete("photos");
+    next.searchParams.delete("photoError");
+    if (stored > 0) next.searchParams.set("photos", String(stored));
+    if (errors.length > 0) next.searchParams.set("photoError", errors.join(" "));
+    window.location.assign(next);
+  }
   const id = `upload-${Object.values(fields).join("-").replace(/[^a-z0-9]/gi, "").slice(0, 24)}`;
 
   return (
@@ -33,7 +118,7 @@ export function PhotoUpload({
       method="post"
       action="/api/photos/upload"
       encType="multipart/form-data"
-      onSubmit={() => setSending(true)}
+      onSubmit={onSubmit}
       className={single ? "mt-2 flex flex-wrap items-center gap-2 text-sm" : "space-y-3"}
     >
       {Object.entries(fields).map(([k, v]) => (
@@ -90,7 +175,7 @@ export function PhotoUpload({
           buttonClass
         }
       >
-        {sending ? "Uploading…" : label}
+        {sending ? progress || "Uploading…" : label}
       </button>
     </form>
   );

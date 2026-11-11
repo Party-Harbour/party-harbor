@@ -5,7 +5,7 @@ import { EventCover } from "@/components/event-cover";
 import { Icon } from "@/components/icons";
 import { Card, EVENT_STATUS_LABEL, EVENT_STATUS_TONE, EmptyState, LinkButton, Pill } from "@/components/ui";
 import { requireHost } from "@/lib/auth";
-import { countdownLabel, daysUntil, formatDateTime } from "@/lib/dates";
+import { countdownLabel, daysUntil, formatDateTime, utcToWall } from "@/lib/dates";
 import { getEventTasks, listEventSummaries, listHouseholds, listOpenTasks, type EventSummary } from "@/lib/queries";
 import { getTheme } from "@/lib/themes";
 
@@ -43,7 +43,7 @@ export default async function DashboardPage() {
       <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="font-display text-3xl font-semibold tracking-tight text-navy">
-            {greeting(now.getHours())}, {host.displayName}! 👋
+            {greeting(Number(utcToWall(now, host.timezone).slice(11, 13)))}, {host.displayName}! 👋
           </h1>
           <p className="mt-1 text-sm text-navy/70">
             {upcoming.length === 0

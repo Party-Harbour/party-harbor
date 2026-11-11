@@ -57,7 +57,11 @@ Invitation links are stored hashed for lookups plus encrypted for resending; the
 
 ## Not built yet (per the PRD phases)
 
-WhatsApp and email adapters (digests and guest messages are SMS or in-app for now), gallery ZIP export and retention expiry, the external agent API, SMS reply voting, and multi-host co-host permissions. Hosting on Vercel/Supabase is a later step; the schema is plain Postgres so the move is a driver swap.
+WhatsApp and email adapters (digests and guest messages are SMS or in-app for now), gallery ZIP export and retention expiry, the external agent API, SMS reply voting, multi-host co-host permissions, and password reset or sign-in rate limiting.
+
+## Hosting
+
+The same code runs on Supabase and Vercel: set `DATABASE_URL` and the app uses that Postgres instead of the embedded one, set the Supabase URL and secret key and photos go to a private storage bucket, and a scheduler calls `/api/cron/dispatch` in place of the local timer. Migrations and the first host accounts are applied at deploy time by `npm run db:migrate`. Step-by-step instructions are in [docs/hosting.md](docs/hosting.md).
 
 ## Project layout
 
@@ -67,6 +71,8 @@ src/app/e/[token]/   guest microsite
 src/app/login/       host sign-in
 src/actions/         server actions (all host actions call requireHost)
 src/db/schema.ts     Drizzle schema (Postgres)
+src/db/index.ts      picks the embedded database or DATABASE_URL (postgres.ts)
+scripts/migrate.ts   deploy-time migrations + host accounts for a hosted database
 src/db/seed.ts       first-run synthetic data
 src/lib/             auth, tokens, dates, queries, messaging/, gallery/, templates/, digest/ (build, render, schedule)
 src/app/api/         upload + photo proxy, cron dispatch, inbound SMS

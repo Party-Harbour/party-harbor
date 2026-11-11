@@ -13,6 +13,7 @@ export type HostUser = {
   email: string;
   displayName: string;
   role: "owner" | "cohost";
+  timezone: string;
 };
 
 export async function getCurrentHost(): Promise<HostUser | null> {
@@ -25,6 +26,7 @@ export async function getCurrentHost(): Promise<HostUser | null> {
       email: schema.users.email,
       displayName: schema.users.displayName,
       role: schema.users.role,
+      timezone: schema.users.timezone,
     })
     .from(schema.sessions)
     .innerJoin(schema.users, eq(schema.sessions.userId, schema.users.id))

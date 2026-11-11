@@ -1,11 +1,12 @@
 /**
- * Dev/self-hosted heartbeat: once a minute, send whatever is due. On a
- * serverless host this does nothing useful; point a cron at /api/cron/dispatch
- * instead. Set MESSAGING_HEARTBEAT=off to disable.
+ * Dev/self-hosted heartbeat: once a minute, send whatever is due. Skipped on
+ * Vercel, where instances freeze between requests: there a scheduler calls
+ * /api/cron/dispatch instead (see docs/hosting.md). Set MESSAGING_HEARTBEAT=off
+ * to disable it anywhere else.
  */
 export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
-  if (process.env.MESSAGING_HEARTBEAT === "off") return;
+  if (process.env.MESSAGING_HEARTBEAT === "off" || process.env.VERCEL) return;
   const g = globalThis as unknown as { __phHeartbeat?: ReturnType<typeof setInterval> };
   if (g.__phHeartbeat) return;
   const { runDueJobs } = await import("./lib/messaging/dispatcher");

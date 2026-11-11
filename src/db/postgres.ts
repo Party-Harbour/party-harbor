@@ -2,9 +2,40 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as schema from "./schema";
 
+/** A pooler host looks like "aws-0-us-east-1.pooler.supabase.com". */
+export function supabasePoolerHost(raw: string | undefined = process.env.SUPABASE_POOLER_HOST): string | null {
+  const host = raw?.trim().toLowerCase() ?? "";
+  return host.endsWith(".pooler.supabase.com") && !host.includes("/") && !host.includes(":") ? host : null;
+}
+
+/** True for Supabase's "Direct connection" string, which is IPv6-only and unreachable from most serverless hosts. */
+export function isSupabaseDirectUrl(url: string): boolean {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    return host.startsWith("db.") && host.endsWith(".supabase.co");
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Supabase's connect dialog shows the "Direct connection" string first, so it
+ * is the one people paste. Given the project's pooler host, this rewrites it
+ * into the "Transaction pooler" form: same password and database, user
+ * "postgres.<ref>", port 6543. Anything else is returned untouched.
+ */
+export function viaSupabasePooler(url: string, poolerHost: string | null = supabasePoolerHost()): string {
+  if (!poolerHost || !isSupabaseDirectUrl(url)) return url;
+  const parsed = new URL(url);
+  const ref = parsed.hostname.slice("db.".length, parsed.hostname.length - ".supabase.co".length);
+  // `password` stays percent-encoded exactly as it was given.
+  return `${parsed.protocol}//postgres.${ref}:${parsed.password}@${poolerHost}:6543${parsed.pathname}${parsed.search}`;
+}
+
 /** Set DATABASE_URL to run against a real Postgres (Supabase, Neon, self-hosted) instead of the embedded one. */
 export function hostedDatabaseUrl(): string | null {
-  return process.env.DATABASE_URL?.trim() || null;
+  const url = process.env.DATABASE_URL?.trim();
+  return url ? viaSupabasePooler(url) : null;
 }
 
 function isLocalHost(url: string): boolean {

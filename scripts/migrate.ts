@@ -45,8 +45,11 @@ function checkDatabaseUrl(url: string): void {
   }
   const host = parsed.hostname.toLowerCase();
   if (host.startsWith("db.") && host.endsWith(".supabase.co")) {
+    const given = process.env.SUPABASE_POOLER_HOST?.trim();
     throw new SetupError(
-      `DATABASE_URL is Supabase's "Direct connection" string, which Vercel cannot reach. In Supabase click Connect and copy the "Transaction pooler" string instead (it ends in :6543/postgres). ${WHERE}`,
+      given
+        ? `SUPABASE_POOLER_HOST is set but does not look like a pooler host (expected something like aws-0-us-east-1.pooler.supabase.com). ${WHERE}`
+        : `DATABASE_URL is Supabase's "Direct connection" string, which Vercel cannot reach. Either replace it with the "Transaction pooler" string (Supabase > Connect > Connection Method > Transaction pooler; it ends in :6543/postgres), or keep it and add SUPABASE_POOLER_HOST with that string's host name. ${WHERE}`,
     );
   }
   if (host.endsWith(".pooler.supabase.com") && parsed.port === "5432") {
@@ -90,6 +93,9 @@ function explain(err: unknown): string {
   }
   if (code === "ENOTFOUND" || code === "EAI_AGAIN") {
     return `The host name in DATABASE_URL does not exist. Copy the "Transaction pooler" string again from Supabase > Connect. ${WHERE}`;
+  }
+  if (code === "ENETUNREACH" || /ENETUNREACH/.test(text)) {
+    return `This build machine cannot reach the database address in DATABASE_URL (it is IPv6-only). Use Supabase's "Transaction pooler" string, or add SUPABASE_POOLER_HOST. ${WHERE}`;
   }
   if (code === "CONNECT_TIMEOUT" || code === "ETIMEDOUT" || code === "ECONNREFUSED") {
     return `Could not reach the database (${code}). Check the Supabase project is not paused, and that DATABASE_URL is the "Transaction pooler" string.`;

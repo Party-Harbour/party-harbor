@@ -92,7 +92,7 @@ function rejectedPassword(): string {
   try {
     const parsed = new URL(process.env.DATABASE_URL?.trim() ?? "");
     const password = decodeURIComponent(parsed.password);
-    if (password.startsWith("[") && password.endsWith("]")) clues.push("it is still wrapped in [square brackets]");
+    if (password.startsWith("[") && password.endsWith("]")) clues.push("it was wrapped in [square brackets]; those were dropped and it was still refused");
     if (password !== password.trim()) clues.push("it has a space at the start or end");
     if (parsed.hash) clues.push("it contains a # so everything after that was cut off");
     if (parsed.search) clues.push("it may contain a ? which cuts it short");

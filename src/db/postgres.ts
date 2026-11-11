@@ -50,10 +50,28 @@ export function withPassword(url: string, password: string | null = databasePass
   }
 }
 
+/**
+ * Supabase shows the password slot as "[YOUR-PASSWORD]", and it is natural to
+ * replace the words but keep the brackets. A password wrapped in [ ] is read
+ * as that slip and the brackets are dropped. (A password that really does
+ * start with [ and end with ] can be given in SUPABASE_DB_PASSWORD instead.)
+ */
+export function withoutPlaceholderBrackets(url: string): string {
+  try {
+    const parsed = new URL(url);
+    const password = decodeURIComponent(parsed.password);
+    if (password.length < 3 || !password.startsWith("[") || !password.endsWith("]")) return url;
+    if (password === "[YOUR-PASSWORD]") return url; // untouched placeholder: reported, not guessed at
+    return withPassword(url, password.slice(1, -1));
+  } catch {
+    return url;
+  }
+}
+
 /** Set DATABASE_URL to run against a real Postgres (Supabase, Neon, self-hosted) instead of the embedded one. */
 export function hostedDatabaseUrl(): string | null {
   const url = process.env.DATABASE_URL?.trim();
-  return url ? withPassword(viaSupabasePooler(url)) : null;
+  return url ? withPassword(withoutPlaceholderBrackets(viaSupabasePooler(url))) : null;
 }
 
 function isLocalHost(url: string): boolean {
